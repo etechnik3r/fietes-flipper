@@ -1,0 +1,14 @@
+{
+  "name": "Fietes Formenflipper: Die Pilz-Arena",
+  "short_name": "Formenflipper",
+  "description": "Kindgerechtes Flipper-Lernspiel: Buchstaben und Formen treffen, Spiegelbilder zeichnen.",
+  "lang": "de",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#1d2c54",
+  "theme_color": "#8fb2e6",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

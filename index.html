@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  Fietes Formenflipper: Die Pilz-Arena
+  ----------------------------------------------------------------------------
+  Kindgerechtes Flipper-Lernspiel (ca. 6 Jahre) rund um Buchstaben und
+  geometrische Formen. Gleiche Design-Sprache wie "Uhrzeit-Uhu"
+  (JONFIE STUDIOS): grosse Touch-Flaechen, wenig Text, weiche Schatten.
+
+  Struktur (dieses File) / Aussehen (style.css) / Logik (game.js) getrennt.
+  Physik: matter.min.js (lokal eingebunden, kein CDN -> offline-faehig).
+
+  SPIELABLAUF:
+    1. Titelscreen -> ein Tipp startet das Spiel, die Kugel wird abgeschossen.
+    2. Zwei grosse Touch-Zonen unten steuern die Flipper-Arme (links/rechts).
+    3. Pilz-Bumper und Tore tragen Buchstaben oder Formen. Bei Beruehrung
+       wird das Symbol gross eingeblendet und vorgesprochen.
+    4. Missionen ("Triff das M!") bringen Bonuspunkte - ohne Zeitdruck,
+       ohne Strafen, kein Game Over.
+    5. Faellt die Kugel heraus, kommt das Spiegel-Minispiel: eine halbe
+       Zeichnung mit dem Finger spiegeln -> danach startet die naechste Kugel.
+
+  ASSETS TAUSCHEN (Platzhalter -> eigene Grafiken/Sounds):
+    - Alle Spielfeld-Grafiken werden in game.js im Abschnitt "RENDERING"
+      auf den Canvas gezeichnet (zeichneBumper, zeichneTor, zeichneKugel ...).
+      Dort einfach drawImage() mit eigenen Bildern einsetzen.
+    - Alle Toene entstehen in spielKlang() per WebAudio; eigene Sounds:
+      Audio-Dateien laden und dort abspielen.
+    - Die Sprachausgabe laeuft ueber die Browser-Sprachsynthese (sprich()).
+
+  Hinweis: ?v=NUMMER hinter style.css/game.js erzwingt frische Dateien
+  (umgeht Browser-/CDN-Caches). Bei jeder Aenderung die Nummer erhoehen
+  UND die Cache-Version in sw.js anpassen.
+
+  Barrierefreiheit: user-scalable=no ist BEWUSST gesetzt, damit schnelles
+  Doppeltippen auf die Flipper-Zonen nicht die Seite zoomt.
+  ============================================================================
+-->
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Kindgerechtes Flipper-Lernspiel: Buchstaben und Formen treffen, Spiegelbilder zeichnen.">
+  <meta name="theme-color" content="#8fb2e6">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Fietes Formenflipper: Die Pilz-Arena</title>
+
+  <!-- PWA: installierbar + offline (siehe manifest.webmanifest / sw.js).
+       Schriften liegen lokal in fonts/ (kein CDN noetig). -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+</head>
+
+<body>
+
+  <!-- 0) TITELSCREEN: erscheint beim Laden, ein Tipp irgendwohin startet das
+       Spiel (und schaltet gleichzeitig Audio frei - Browser verlangen dafuer
+       eine Nutzer-Geste). -->
+  <div class="titelscreen" id="titelscreen" role="button" aria-label="Tippe, um das Spiel zu starten">
+    <span class="titel-frosch" aria-hidden="true">🐸</span>
+    <h1 class="titel-name">Fietes Formenflipper</h1>
+    <p class="titel-unter">Die Pilz-Arena</p>
+    <p class="titel-symbole" aria-hidden="true">🍄 🔤 ⭐ 🔺 🟦</p>
+    <p class="titel-tipp">👆 Tippe, um zu starten</p>
+    <p class="titel-studio">ein Spiel von JONFIE STUDIOS</p>
+  </div>
+
+
+  <!-- 1) TOP-BAR: Marke, Punkte + Missions-Sterne, Menue -->
+  <header class="top-bar">
+    <!-- Klick auf den Frosch zeigt Spielname + Studio -->
+    <button type="button" class="marke" id="button-about" aria-label="Über das Spiel">
+      <span class="marke-frosch" aria-hidden="true">🐸</span>
+      <span class="marke-text">Formenflipper</span>
+    </button>
+    <div class="status">
+      <button type="button" class="stat" id="stat-punkte" aria-label="Deine Punkte">
+        <span class="stat-icon" aria-hidden="true">🔵</span>
+        <span class="stat-wert" id="anzeige-punkte">0</span>
+      </button>
+      <button type="button" class="stat" id="stat-sterne" aria-label="Geschaffte Missionen">
+        <span class="stat-icon" aria-hidden="true">⭐</span>
+        <span class="stat-wert" id="anzeige-sterne">0</span>
+      </button>
+    </div>
+    <div class="top-knoepfe">
+      <button type="button" class="menue-button" id="button-einstellungen" aria-label="Menü öffnen">
+        <span class="menue-icon" aria-hidden="true">⚙️</span>
+      </button>
+    </div>
+  </header>
+
+
+  <!-- 2) MISSIONS-SCHILD: edles dunkles Schild wie beim Uhrzeit-Uhu.
+       Zeigt die aktuelle Mission ("Triff das M!"); Antippen liest sie vor. -->
+  <button type="button" class="mission-schild" id="mission-schild" aria-label="Mission anhören">
+    <span class="mission-label">🎯 MISSION</span>
+    <span class="mission-text" id="mission-text">Los geht’s!</span>
+    <span class="mission-hoeren" aria-hidden="true">🔊</span>
+  </button>
+
+
+  <!-- 3) SPIELFELD: der Canvas fuellt den Platz zwischen Schild und
+       Flipper-Zonen. Physik + Zeichnung uebernimmt game.js. -->
+  <main class="spielfeld-bereich">
+    <canvas id="spielfeld" class="spielfeld" aria-label="Flipper-Spielfeld"></canvas>
+
+    <!-- Grosses Symbol-Blitzen: wird bei jedem Bumper-/Tor-Treffer kurz
+         eingeblendet (Buchstabe oder Form, riesig in der Feldmitte). -->
+    <div class="symbol-blitz" id="symbol-blitz" aria-hidden="true"></div>
+
+    <!-- Lob-Banner nach geschaffter Mission ("Super!") -->
+    <div class="lob-banner" id="lob-banner" aria-hidden="true" hidden>🎉 Super!</div>
+  </main>
+
+
+  <!-- 4) FLIPPER-STEUERUNG: zwei riesige Touch-Zonen am unteren Rand.
+       Gedrueckt halten = Flipper oben, loslassen = Flipper faellt zurueck. -->
+  <footer class="steuerung">
+    <button type="button" class="flipper-zone flipper-links" id="zone-links" aria-label="Linken Flipper bewegen">
+      <span class="zone-pfeil" aria-hidden="true">⬅️</span>
+      <span class="zone-text">Flip!</span>
+    </button>
+    <button type="button" class="flipper-zone flipper-rechts" id="zone-rechts" aria-label="Rechten Flipper bewegen">
+      <span class="zone-text">Flip!</span>
+      <span class="zone-pfeil" aria-hidden="true">➡️</span>
+    </button>
+  </footer>
+
+
+  <!-- 5) SPIEGEL-MINISPIEL: Vollbild-Overlay zwischen zwei Kugeln.
+       Links eine halbe Zeichnung, rechts spiegelt das Kind sie mit dem
+       Finger nach (Punkte "einsammeln"). Danach kommt die naechste Kugel. -->
+  <div class="spiegel-overlay" id="spiegel-overlay" aria-hidden="true">
+    <div class="spiegel-karte">
+      <h2 class="spiegel-titel" id="spiegel-titel">🪞 Zaubere die andere Hälfte!</h2>
+      <p class="spiegel-hinweis" id="spiegel-hinweis">Fahre rechts mit dem Finger über die Punkte.</p>
+      <canvas id="spiegel-canvas" class="spiegel-canvas" aria-label="Spiegelbild nachzeichnen"></canvas>
+      <div class="spiegel-fuss">
+        <!-- dezenter Ausweg, falls es mal nicht klappen will (keine Strafe) -->
+        <button type="button" class="spiegel-skip" id="spiegel-skip">Weiter ohne Zaubern →</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Konfetti-Ebene fuer die Erfolgs-Feier (von game.js befuellt). -->
+  <div class="konfetti-ebene" id="konfetti" aria-hidden="true"></div>
+
+  <!-- Kleines Popover: "Über das Spiel", Punkte-/Sterne-Erklaerung. -->
+  <div class="popover" id="popover" role="status" hidden></div>
+
+
+  <!-- EINSTELLUNGS-SEITE (bewusst klein gehalten) -->
+  <div class="modal-overlay" id="einstellungen" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Einstellungen">
+      <header class="modal-kopf">
+        <h2 class="modal-titel">⚙️ Einstellungen</h2>
+        <button type="button" class="modal-schliessen" id="einstellungen-zu" aria-label="Schließen">✕</button>
+      </header>
+
+      <div class="modal-inhalt">
+        <!-- Was steht auf Bumpern und Toren? -->
+        <section class="opt-gruppe">
+          <h3 class="opt-titel">🔤 Was lernen wir?</h3>
+          <div class="opt-reihe">
+            <button type="button" class="opt-karte" data-setting="symbole" data-wert="buchstaben">
+              <span class="opt-icon">🅰️</span><span class="opt-name">Buchstaben</span>
+              <span class="opt-text">A bis Z</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="symbole" data-wert="formen">
+              <span class="opt-icon">🔷</span><span class="opt-name">Formen</span>
+              <span class="opt-text">Kreis, Dreieck …</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="symbole" data-wert="mix">
+              <span class="opt-icon">🔀</span><span class="opt-name">Mix</span>
+              <span class="opt-text">bunt gemischt</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Spiegel-Minispiel an/aus (falls nur geflippert werden soll) -->
+        <section class="opt-gruppe">
+          <h3 class="opt-titel">🪞 Spiegel-Zauber</h3>
+          <div class="opt-reihe opt-reihe-zwei">
+            <button type="button" class="opt-karte" data-setting="spiegel" data-wert="an">
+              <span class="opt-icon">🪞</span><span class="opt-name">An</span>
+              <span class="opt-text">zwischen den Kugeln</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="spiegel" data-wert="aus">
+              <span class="opt-icon">⚡</span><span class="opt-name">Aus</span>
+              <span class="opt-text">sofort weiterflippern</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Ton -->
+        <section class="opt-gruppe">
+          <h3 class="opt-titel">🔔 Soundeffekte</h3>
+          <div class="opt-reihe opt-reihe-zwei">
+            <button type="button" class="opt-karte" data-setting="toene" data-wert="an">
+              <span class="opt-icon">🔔</span><span class="opt-name">An</span>
+              <span class="opt-text">Klänge beim Treffen</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="toene" data-wert="aus">
+              <span class="opt-icon">🔕</span><span class="opt-name">Aus</span>
+              <span class="opt-text">ganz leise</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Sprachausgabe -->
+        <section class="opt-gruppe">
+          <h3 class="opt-titel">🗣️ Sprachausgabe</h3>
+          <div class="opt-reihe opt-reihe-zwei">
+            <button type="button" class="opt-karte" data-setting="sprache" data-wert="an">
+              <span class="opt-icon">🗣️</span><span class="opt-name">An</span>
+              <span class="opt-text">Symbole werden vorgelesen</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="sprache" data-wert="aus">
+              <span class="opt-icon">🤫</span><span class="opt-name">Aus</span>
+              <span class="opt-text">ohne Vorlesen</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Fortschritt zuruecksetzen -->
+        <section class="opt-gruppe">
+          <h3 class="opt-titel">🧹 Fortschritt</h3>
+          <button type="button" class="reset-button" id="button-reset">
+            🗑️ Punkte &amp; Sterne zurücksetzen
+          </button>
+        </section>
+      </div>
+
+      <button type="button" class="modal-fertig" id="einstellungen-fertig">Fertig 👍</button>
+    </div>
+  </div>
+
+
+  <!-- ELTERN-DIALOG: kleine Rechenaufgabe als Sicherung vor dem Zuruecksetzen
+       (Kinder sollen den Spielstand nicht versehentlich loeschen). -->
+  <div class="modal-overlay" id="eltern-dialog" aria-hidden="true">
+    <div class="modal eltern-modal" role="dialog" aria-modal="true" aria-label="Frage für Erwachsene">
+      <h2 class="eltern-titel">🔒 Frage für Erwachsene</h2>
+      <p class="eltern-text">Damit nichts aus Versehen gelöscht wird:<br>
+        Wie viel ist <b id="eltern-frage">3 + 4</b>?</p>
+      <div class="eltern-antworten" id="eltern-antworten"></div>
+      <button type="button" class="eltern-abbrechen" id="eltern-abbrechen">Abbrechen</button>
+    </div>
+  </div>
+
+  <!-- Physik-Bibliothek (lokal, offline-faehig) + Spiellogik -->
+  <script src="matter.min.js"></script>
+  <script src="game.js?v=1"></script>
+</body>
+</html>

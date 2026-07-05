@@ -1,0 +1,733 @@
+/* ===========================================================================
+   Fietes Formenflipper: Die Pilz-Arena  –  Stylesheet (style.css)
+   ---------------------------------------------------------------------------
+   Mobil-first, Portrait, fuer ca. 6-Jaehrige. Wenig Text, grosse Symbole,
+   riesige Flipper-Touch-Zonen. Gleiche Design-Sprache wie "Uhrzeit-Uhu":
+     - Blauverlauf-Buehne, weisse Flaechen mit WEICHEN, diffusen Schatten
+     - ein dunkles, edles Missions-Schild als Blickfang (goldene Schrift)
+     - warmes Orange als Highlight, frisches Gruen als Erfolgsfarbe
+     - Schriften: Baloo 2 (Display) + Nunito (Text), lokal eingebunden
+   =========================================================================== */
+
+
+/* 0) LOKALE SCHRIFTEN (offline-faehig, kein CDN) ---------------------------- */
+@font-face {
+  font-family: "Baloo 2";
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url("fonts/baloo2-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 600 800;
+  font-display: swap;
+  src: url("fonts/nunito-latin.woff2") format("woff2");
+}
+
+
+/* 1) DESIGN-TOKENS (identische Palette wie Uhrzeit-Uhu) --------------------- */
+:root {
+  /* Buehne: freundlicher Blauverlauf */
+  --bg-top: #e7f0fe;
+  --bg-mid: #c2d8f6;
+  --bg-bot: #8fb2e6;
+
+  /* Flaechen + Text */
+  --surface:  #ffffff;
+  --ink:      #1e2c52;
+  --muted:    #5f6e96;
+
+  /* edles dunkles Schild (Mission) */
+  --card-1: #2b4373;
+  --card-2: #1d2c54;
+
+  /* Akzente */
+  --accent:   #ff9e2c;     /* Highlights / Missions-Ziel */
+  --cta:      #28c08a;     /* Erfolgsfarbe (frisches Gruen) */
+  --cta-deep: #149e72;
+  --gold:     #f3c44a;     /* goldene Schrift auf dem Schild */
+
+  /* Flipper-Zonen: links BLAU, rechts ROT (gleiche Merk-Konvention wie die
+     Lernuhr-Zeiger: zwei klar unterscheidbare Grundfarben) */
+  --zone-links:  #2f6fd6;
+  --zone-rechts: #d9453e;
+
+  /* Schriften */
+  --font-display: "Baloo 2", "Comic Sans MS", "Trebuchet MS", system-ui, sans-serif;
+  --font-body:    "Nunito", "Trebuchet MS", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius:   22px;
+  --tap-min:  60px;
+
+  /* weiche, diffuse Schatten = Wertigkeit */
+  --sh-soft:  0 14px 34px rgba(36, 64, 130, 0.18);
+  --sh-card:  0 8px 20px rgba(36, 64, 130, 0.14);
+  --sh-chip:  0 4px 12px rgba(36, 64, 130, 0.16);
+}
+
+
+/* 2) GRUND-LAYOUT ----------------------------------------------------------- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+body {
+  font-family: var(--font-body);
+  font-weight: 700;
+  color: var(--ink);
+
+  background:
+    radial-gradient(120% 80% at 50% -20%, rgba(255,255,255,0.55), transparent 55%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 52%, var(--bg-bot) 100%);
+  background-attachment: fixed;
+
+  display: flex;
+  flex-direction: column;
+  /* FESTE Bildschirmhoehe + overflow hidden: der Spielscreen scrollt NIE.
+     Spielfeld und Zonen skalieren stattdessen mit (flex + vh-Klammern). */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+
+/* 3) TOP-BAR ----------------------------------------------------------------- */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 18px rgba(36, 64, 130, 0.12);
+  position: relative;
+  z-index: 5;
+}
+
+.marke {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 14px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: transform 0.1s ease;
+}
+.marke:active { transform: scale(0.94); }
+.marke-frosch { font-size: 1.7rem; line-height: 1; }
+.marke-text {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+/* Punkte-/Sterne-Chips: weiss, weicher Schatten, klare Zahl */
+.status { display: flex; gap: 8px; }
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface);
+  border: none;
+  border-radius: 999px;
+  padding: 5px 12px 5px 10px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  box-shadow: var(--sh-chip);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.stat:active { transform: scale(0.94); }
+.stat-icon { font-size: 1.2rem; line-height: 1; }
+.stat-wert { font-size: 1.2rem; font-weight: 800; min-width: 1ch; text-align: center; }
+/* kurzes Aufploppen, wenn Punkte dazukommen */
+.stat.plopp { animation: stat-plopp 0.35s ease; }
+@keyframes stat-plopp {
+  0%, 100% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+}
+
+.top-knoepfe { display: flex; gap: 10px; }
+.menue-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  background: var(--surface);
+  border: none;
+  border-radius: 50%;
+  box-shadow: var(--sh-chip);
+  cursor: pointer;
+  transition: transform 0.18s ease;
+}
+.menue-button:active { transform: scale(0.9) rotate(35deg); }
+.menue-icon { font-size: 1.55rem; line-height: 1; }
+
+
+/* 4) MISSIONS-SCHILD ---------------------------------------------------------
+   Edles dunkles Schild wie das Abfahrt-Schild beim Uhrzeit-Uhu. */
+.mission-schild {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 3vw, 16px);
+  margin: clamp(5px, 1vh, 10px) auto 0;
+  max-width: min(92%, 460px);
+  width: 100%;
+  background: linear-gradient(160deg, var(--card-1), var(--card-2));
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--sh-soft);
+  padding: clamp(6px, 1.2vh, 12px) clamp(14px, 4vw, 26px);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+  position: relative;
+  z-index: 4;
+}
+.mission-schild:active { transform: scale(0.98); }
+.mission-label {
+  font-family: var(--font-display);
+  font-size: clamp(0.72rem, 1.7vh, 0.9rem);
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #aebce6;
+}
+.mission-text {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--gold);
+  font-size: clamp(1.15rem, min(6vw, 3.2vh), 1.8rem);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.mission-hoeren { font-size: clamp(1rem, 2.4vh, 1.3rem); }
+/* neue Mission: Schild ploppt kurz auf */
+.mission-schild.neu { animation: mission-pop 0.7s ease; }
+@keyframes mission-pop {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.07); }
+  60% { transform: scale(0.98); }
+}
+/* Mission geschafft: kurzes goldenes Leuchten */
+.mission-schild.geschafft { animation: mission-glow 0.9s ease; }
+@keyframes mission-glow {
+  0%, 100% { box-shadow: var(--sh-soft); }
+  40% { box-shadow: 0 0 34px rgba(243, 196, 74, 0.9); }
+}
+
+
+/* 5) SPIELFELD ---------------------------------------------------------------
+   Der Canvas fuellt den Rest zwischen Schild und Flipper-Zonen. game.js
+   passt die interne Aufloesung an (devicePixelRatio) und zeichnet alles. */
+.spielfeld-bereich {
+  flex: 1;
+  min-height: 0;                 /* darf schrumpfen -> kein Scrollen */
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(4px, 1vh, 10px) 10px 0;
+}
+.spielfeld {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;            /* kein Browser-Scrollen/Zoomen auf dem Feld */
+}
+
+/* Grosses Symbol-Blitzen bei jedem Treffer: Buchstabe/Form riesig in der
+   Feldmitte, ploppt auf und verschwindet weich (Animation via Klasse). */
+.symbol-blitz {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: clamp(5rem, 32vw, 11rem);
+  font-weight: 800;
+  color: var(--ink);
+  text-shadow: 0 8px 30px rgba(36, 64, 130, 0.35);
+  opacity: 0;
+}
+.symbol-blitz.zeigt { animation: symbol-pop 0.9s ease forwards; }
+@keyframes symbol-pop {
+  0%   { opacity: 0; transform: scale(0.3); }
+  25%  { opacity: 1; transform: scale(1.15); }
+  45%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.1) translateY(-24px); }
+}
+
+/* Lob-Banner nach geschaffter Mission */
+.lob-banner {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 26px;
+  background: linear-gradient(180deg, var(--cta), var(--cta-deep));
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 6.5vw, 2rem);
+  font-weight: 800;
+  border-radius: 999px;
+  box-shadow: 0 10px 26px rgba(20, 158, 114, 0.4);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.lob-banner[hidden] { display: none; }
+.lob-banner.zeigt { animation: lob-pop 1.4s ease forwards; }
+@keyframes lob-pop {
+  0%   { opacity: 0; transform: translateX(-50%) scale(0.4); }
+  20%  { opacity: 1; transform: translateX(-50%) scale(1.1); }
+  35%  { transform: translateX(-50%) scale(1); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) scale(1) translateY(-18px); }
+}
+
+
+/* 6) FLIPPER-ZONEN ------------------------------------------------------------
+   Zwei riesige Knoepfe am unteren Rand: links BLAU, rechts ROT. Gedrueckt
+   halten hebt den jeweiligen Flipper-Arm. Bewusst hoch (>= 96px), damit
+   kleine Daumen sie nicht verfehlen. */
+.steuerung {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 -4px 18px rgba(36, 64, 130, 0.10);
+  position: relative;
+  z-index: 5;
+}
+.flipper-zone {
+  flex: 1;
+  min-height: clamp(84px, 13vh, 120px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 6vw, 1.8rem);
+  font-weight: 800;
+  color: #ffffff;
+  cursor: pointer;
+  touch-action: none;            /* Gedrueckthalten darf nicht scrollen */
+  box-shadow: var(--sh-card);
+  transition: transform 0.08s ease, filter 0.08s ease;
+}
+.flipper-links  { background: linear-gradient(180deg, #4b87e2, var(--zone-links)); }
+.flipper-rechts { background: linear-gradient(180deg, #e56a60, var(--zone-rechts)); }
+/* .aktiv setzt game.js waehrend des Gedrueckthaltens */
+.flipper-zone.aktiv { transform: translateY(3px) scale(0.98); filter: brightness(1.12); }
+.zone-pfeil { font-size: 1.6em; line-height: 1; }
+
+
+/* 7) SPIEGEL-MINISPIEL (Overlay zwischen zwei Kugeln) ------------------------ */
+.spiegel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: rgba(20, 34, 70, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.spiegel-overlay.offen { display: flex; }
+
+.spiegel-karte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 94vh;
+  background: var(--surface);
+  border-radius: 26px;
+  box-shadow: var(--sh-soft);
+  padding: 16px 14px 10px;
+}
+.spiegel-titel {
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 5.4vw, 1.5rem);
+  color: var(--ink);
+  text-align: center;
+}
+.spiegel-hinweis {
+  font-size: clamp(0.85rem, 3.8vw, 1rem);
+  color: var(--muted);
+  text-align: center;
+}
+.spiegel-hinweis.erfolg { color: var(--cta-deep); }
+.spiegel-canvas {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+  border-radius: 18px;
+  background: #f7f9fe;
+  box-shadow: inset 0 2px 10px rgba(36, 64, 130, 0.10);
+  touch-action: none;            /* Zeichnen mit dem Finger, kein Scrollen */
+}
+.spiegel-fuss {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 40px;
+}
+/* dezenter Ausweg (erscheint erst nach einer Weile, siehe game.js) */
+.spiegel-skip {
+  background: none;
+  border: none;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 8px 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.spiegel-skip.sichtbar { opacity: 1; pointer-events: auto; }
+
+
+/* 8) KONFETTI + POPOVER ------------------------------------------------------ */
+.konfetti-ebene {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  overflow: hidden;
+}
+.konfetti {
+  position: absolute;
+  top: -18px;
+  width: 10px;
+  height: 14px;
+  border-radius: 3px;
+  animation: konfetti-fall 1.6s ease-in forwards;
+}
+@keyframes konfetti-fall {
+  to { transform: translateY(105vh) rotate(560deg); opacity: 0.85; }
+}
+
+.popover {
+  position: fixed;
+  z-index: 50;
+  max-width: 260px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 13px 15px;
+  border-radius: 16px;
+  box-shadow: var(--sh-soft);
+}
+.popover[hidden] { display: none; }
+.popover .about-titel {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+.popover .about-unter { display: block; color: var(--muted); margin-bottom: 6px; }
+.popover .about-studio {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--cta-deep);
+  letter-spacing: 0.5px;
+}
+
+
+/* 9) EINSTELLUNGS-SEITE (Vollbild-Overlay, wie beim Uhrzeit-Uhu) ------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(20, 34, 70, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.modal-overlay.offen { display: flex; }
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  max-height: 92vh;
+  background: var(--surface);
+  border-radius: 26px;
+  box-shadow: var(--sh-soft);
+  overflow: hidden;
+}
+.modal-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 12px;
+  border-bottom: 2px solid #eef1f8;
+}
+.modal-titel { font-family: var(--font-display); font-size: 1.7rem; color: var(--ink); }
+.modal-schliessen {
+  width: 44px; height: 44px;
+  font-size: 1.2rem; font-weight: 800;
+  color: var(--ink);
+  background: #eef1f8;
+  border: none; border-radius: 50%;
+  cursor: pointer;
+}
+.modal-schliessen:active { transform: scale(0.92); }
+
+.modal-inhalt { padding: 16px 20px; overflow-y: auto; }
+
+.opt-gruppe { margin-bottom: 20px; }
+.opt-titel { font-family: var(--font-display); font-size: 1.2rem; color: var(--ink); margin-bottom: 10px; }
+.opt-reihe { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.opt-reihe-zwei { grid-template-columns: repeat(2, 1fr); }
+
+.opt-karte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 14px 8px;
+  background: #f7f9fe;
+  border: 3px solid #f7f9fe;
+  border-radius: 18px;
+  box-shadow: var(--sh-card);
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.opt-karte:active { transform: scale(0.96); }
+.opt-karte.aktiv { border-color: var(--accent); background: #fff5e6; }
+.opt-icon { font-size: 1.9rem; line-height: 1; }
+.opt-name { font-family: var(--font-display); font-size: 1.05rem; font-weight: 800; color: var(--ink); }
+.opt-text { font-size: 0.82rem; color: var(--muted); line-height: 1.15; }
+
+.reset-button {
+  width: 100%;
+  min-height: 54px;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #c0392b;
+  background: #fdeeec;
+  border: 2px solid #f3c6c0;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+.reset-button:active { transform: scale(0.98); background: #fbe2de; }
+
+.modal-fertig {
+  margin: 4px 20px 20px;
+  min-height: 58px;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(180deg, var(--cta), var(--cta-deep));
+  border: none;
+  border-radius: 18px;
+  box-shadow: 0 8px 18px rgba(20, 158, 114, 0.30);
+  cursor: pointer;
+}
+.modal-fertig:active { transform: translateY(2px); }
+
+
+/* 9b) ELTERN-DIALOG (Sicherung vor dem Zuruecksetzen) ------------------------ */
+.eltern-modal {
+  max-width: 380px;
+  padding: 24px 22px 18px;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+.eltern-modal.wackelt { animation: schuetteln 0.5s ease; }
+.eltern-titel { font-family: var(--font-display); font-size: 1.4rem; color: var(--ink); }
+.eltern-text { color: var(--muted); font-size: 1rem; margin: 8px 0 4px; }
+.eltern-text b { color: var(--ink); font-size: 1.3rem; }
+.eltern-antworten {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  margin: 12px 0 10px;
+}
+.eltern-antwort {
+  min-height: 54px;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--ink);
+  background: #f7f9fe;
+  border: 3px solid #eef1f8;
+  border-radius: 16px;
+  cursor: pointer;
+}
+.eltern-antwort:active { transform: scale(0.95); }
+.eltern-abbrechen {
+  min-height: 46px;
+  width: 100%;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+
+/* 10) TITELSCREEN -------------------------------------------------------------
+   Wertiger Vollbild-Auftakt (dunkles Blau + Gold), identische Anmutung wie
+   beim Uhrzeit-Uhu. Ein Tipp irgendwohin startet das Spiel. */
+.titelscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px;
+  text-align: center;
+  background:
+    radial-gradient(90% 55% at 50% 18%, rgba(110, 145, 220, 0.40), transparent 62%),
+    linear-gradient(180deg, #24365f 0%, var(--card-2) 55%, #131f3e 100%);
+  cursor: pointer;
+  transition: opacity 0.45s ease;
+}
+.titelscreen.aus { opacity: 0; pointer-events: none; }
+.titelscreen[hidden] { display: none; }
+.titel-frosch {
+  font-size: clamp(4.5rem, 24vw, 7.5rem);
+  line-height: 1.1;
+  filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.35));
+  animation: titel-schweben 3.4s ease-in-out infinite;
+}
+.titel-name {
+  font-family: var(--font-display);
+  font-size: clamp(2.1rem, 10.5vw, 4rem);
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: 1px;
+  line-height: 1.1;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.titel-unter {
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 4.8vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  color: #aebce6;
+}
+.titel-symbole {
+  margin-top: 14px;
+  font-size: clamp(1.2rem, 5.5vw, 1.7rem);
+  letter-spacing: 8px;
+  opacity: 0.9;
+}
+.titel-tipp {
+  margin-top: 26px;
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 4.6vw, 1.35rem);
+  font-weight: 700;
+  color: #ffe6a8;
+  animation: titel-pulsieren 1.7s ease-in-out infinite;
+}
+.titel-studio {
+  position: absolute;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  left: 0; right: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #8fa3d6;
+}
+@keyframes titel-schweben {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+@keyframes titel-pulsieren {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+
+/* 11) ANIMATIONEN + RESPONSIVES VERHALTEN ------------------------------------ */
+@keyframes schuetteln {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-10px) rotate(-2deg); }
+  40% { transform: translateX(10px)  rotate(2deg); }
+  60% { transform: translateX(-7px)  rotate(-1deg); }
+  80% { transform: translateX(7px)   rotate(1deg); }
+}
+
+@media (max-width: 600px) {
+  .marke-text { display: none; }
+  .top-bar { padding: 5px 10px; }
+
+  /* Einstellungen werden zur Vollbild-Seite. */
+  .modal-overlay { padding: 0; }
+  .modal { max-width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
+  .eltern-modal { height: auto; max-width: 92%; border-radius: 22px; margin: auto; }
+  #eltern-dialog.modal-overlay { padding: 20px; }
+}
+
+/* Aeltere/kleinere Handys: Kopfleiste kompakter, mehr Platz fuers Feld */
+@media (max-width: 600px) and (max-height: 820px) {
+  .menue-button { width: 42px; height: 42px; }
+  .menue-icon { font-size: 1.4rem; }
+  .marke-frosch { font-size: 1.45rem; }
+  .stat { padding: 4px 10px 4px 9px; gap: 5px; }
+  .stat-icon, .stat-wert { font-size: 1.05rem; }
+}
+
+@media (pointer: coarse) { :root { --tap-min: 64px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .konfetti, .titel-frosch, .titel-tipp, .mission-schild.neu,
+  .mission-schild.geschafft, .symbol-blitz.zeigt, .lob-banner.zeigt,
+  .stat.plopp {
+    animation: none !important;
+    transition: none !important;
+  }
+  .symbol-blitz.zeigt { opacity: 1; }
+}
