@@ -48,7 +48,7 @@
   <!-- PWA: installierbar + offline (siehe manifest.webmanifest / sw.js).
        Schriften liegen lokal in fonts/ (kein CDN noetig). -->
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="style.css?v=2">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
 </head>
 
@@ -75,6 +75,10 @@
       <span class="marke-text">Formenflipper</span>
     </button>
     <div class="status">
+      <button type="button" class="stat" id="stat-baelle" aria-label="Übrige Kugeln in dieser Runde">
+        <span class="stat-icon" aria-hidden="true">🎱</span>
+        <span class="stat-wert" id="anzeige-baelle">5</span>
+      </button>
       <button type="button" class="stat" id="stat-punkte" aria-label="Deine Punkte">
         <span class="stat-icon" aria-hidden="true">🔵</span>
         <span class="stat-wert" id="anzeige-punkte">0</span>
@@ -112,6 +116,14 @@
 
     <!-- Lob-Banner nach geschaffter Mission ("Super!") -->
     <div class="lob-banner" id="lob-banner" aria-hidden="true" hidden>🎉 Super!</div>
+
+    <!-- Abschuss-Knopf: erscheint, wenn eine Kugel in der Gasse rechts
+         wartet - wie der Abzug beim echten Flipper. -->
+    <button type="button" class="abschuss-button" id="button-abschuss" hidden
+            aria-label="Kugel abschießen">
+      <span class="abschuss-icon" aria-hidden="true">🚀</span>
+      <span class="abschuss-text">Los!</span>
+    </button>
   </main>
 
 
@@ -145,6 +157,17 @@
   </div>
 
 
+  <!-- RUNDEN-ENDE: alle Kugeln gespielt -> Feier mit Punkte-Bilanz
+       (bewusst KEIN "Game Over" - ein Tipp startet die naechste Runde). -->
+  <div class="runde-overlay" id="runde-overlay" hidden>
+    <div class="runde-karte">
+      <span class="runde-pokal" aria-hidden="true">🏆</span>
+      <h2 class="runde-titel">Runde geschafft!</h2>
+      <p class="runde-bilanz">Du hast <b id="runde-punkte">0</b> Punkte gesammelt!</p>
+      <button type="button" class="runde-weiter" id="button-neue-runde">🚀 Neue Runde!</button>
+    </div>
+  </div>
+
   <!-- Konfetti-Ebene fuer die Erfolgs-Feier (von game.js befuellt). -->
   <div class="konfetti-ebene" id="konfetti" aria-hidden="true"></div>
 
@@ -176,6 +199,25 @@
             <button type="button" class="opt-karte" data-setting="symbole" data-wert="mix">
               <span class="opt-icon">🔀</span><span class="opt-name">Mix</span>
               <span class="opt-text">bunt gemischt</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Schwierigkeit: steuert nur das Kugeltempo -->
+        <section class="opt-gruppe">
+          <h3 class="opt-titel">🎚️ Schwierigkeit</h3>
+          <div class="opt-reihe">
+            <button type="button" class="opt-karte" data-setting="schwierigkeit" data-wert="leicht">
+              <span class="opt-icon">🐢</span><span class="opt-name">Leicht</span>
+              <span class="opt-text">gemütliche Kugel</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="schwierigkeit" data-wert="mittel">
+              <span class="opt-icon">🐇</span><span class="opt-name">Mittel</span>
+              <span class="opt-text">flottes Tempo</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="schwierigkeit" data-wert="schnell">
+              <span class="opt-icon">🚀</span><span class="opt-name">Schnell</span>
+              <span class="opt-text">für Profis</span>
             </button>
           </div>
         </section>
@@ -253,6 +295,6 @@
 
   <!-- Physik-Bibliothek (lokal, offline-faehig) + Spiellogik -->
   <script src="matter.min.js"></script>
-  <script src="game.js?v=1"></script>
+  <script src="game.js?v=2"></script>
 </body>
 </html>

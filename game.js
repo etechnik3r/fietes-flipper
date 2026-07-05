@@ -38,18 +38,35 @@
   var FELD_B = 400;
   var FELD_H = 600;
 
-  var KUGEL_RADIUS   = 11;
-  var KUGEL_MAX_TEMPO = 19;      // Tempodeckel gegen Tunneln durch Waende
+  var KUGEL_RADIUS = 11;
+  var BAELLE_PRO_RUNDE = 5;      // Kugel-Vorrat pro Runde (Anzeige oben)
 
-  // Flipper-Geometrie: Drehpunkte + Laenge + Winkel (Ruhe/oben, Bogenmass)
-  var FLIPPER_LAENGE = 64;
+  // Abschuss-Gasse rechts: Trennwand bei x=352, Gassen-Innenraum 356..384
+  var GASSE_X = 352;
+
+  // Flipper-Geometrie: Drehpunkte + Laenge + Winkel (Ruhe/oben, Bogenmass).
+  // Die Drehpunkte sitzen IM Rahmen (am Ende der Einlauf-Schraege), damit
+  // dort keine Tasche entsteht, in der die Kugel liegen bleiben kann.
+  var FLIPPER_LAENGE = 72;
   var FLIPPER_DICKE  = 17;
-  var FLIPPER_RUHE   = 0.50;     // ~29 Grad nach unten
+  var FLIPPER_RUHE   = 0.46;     // ~26 Grad nach unten
   var FLIPPER_OBEN   = -0.52;    // ~30 Grad nach oben
   var FLIPPER_TEMPO_HOCH   = 0.30;  // rad pro Physik-Schritt beim Hochschnellen
   var FLIPPER_TEMPO_RUNTER = 0.12;  // ... und beim Zuruecksinken
-  var PIVOT_L = { x: 124, y: 522 };
-  var PIVOT_R = { x: 276, y: 522 };
+  var PIVOT_L = { x: 116, y: 516 };
+  var PIVOT_R = { x: 284, y: 516 };
+
+  // Drei Schwierigkeitsstufen (im Menue waehlbar): sie steuern NUR das
+  // Kugeltempo (Schwerkraft, Tempodeckel, Staerke aller Kicks) – die
+  // Lerninhalte bleiben gleich. Standard ist "leicht" (gemuetliche Kugel).
+  var SCHWIERIGKEITEN = {
+    leicht:  { gravitation: 0.75, maxTempo: 11, bumperKick: 7.5,
+               sling: { x: 4.5, y: -7 },   abschuss: 15.5, flipperKraft: 0.75 },
+    mittel:  { gravitation: 1.0,  maxTempo: 14, bumperKick: 9.5,
+               sling: { x: 5.5, y: -8.5 }, abschuss: 19,   flipperKraft: 0.9 },
+    schnell: { gravitation: 1.3,  maxTempo: 17, bumperKick: 12,
+               sling: { x: 6.5, y: -10 },  abschuss: 22,   flipperKraft: 1.05 }
+  };
 
   // Punktwerte – bewusst simpel und grosszuegig
   var PUNKTE_BUMPER  = 10;
@@ -80,19 +97,28 @@
     laeuft: false,           // false bis der Titelscreen weggetippt wurde
     punkte: 0,
     sterne: 0,               // geschaffte Missionen
+    baelle: BAELLE_PRO_RUNDE,// uebrige Kugeln in dieser Runde (Anzeige oben)
+    rundenStartPunkte: 0,    // Punktestand beim Rundenbeginn (fuer die Bilanz)
     symbole: "mix",          // Einstellung: buchstaben | formen | mix
+    schwierigkeit: "leicht", // Einstellung: leicht | mittel | schnell
     spiegel: true,           // Spiegel-Minispiel zwischen den Kugeln?
     toene: true,
     sprache: true,
     mission: null,           // { elementIndex, symbol } oder null
-    kugelUnterwegs: false
+    kugelUnterwegs: false,
+    wartetAufAbschuss: false // Kugel liegt in der Gasse, Knopf sichtbar
   };
+
+  // Werte der aktuell gewaehlten Schwierigkeit (Kurzform)
+  function K() { return SCHWIERIGKEITEN[state.schwierigkeit]; }
 
   var el = {};               // DOM-Verweise, werden in init() gefuellt
   [
     "titelscreen", "mission-schild", "mission-text", "spielfeld",
     "symbol-blitz", "lob-banner", "zone-links", "zone-rechts",
-    "anzeige-punkte", "anzeige-sterne", "stat-punkte", "stat-sterne",
+    "anzeige-punkte", "anzeige-sterne", "anzeige-baelle",
+    "stat-punkte", "stat-sterne", "stat-baelle",
+    "button-abschuss", "runde-overlay", "runde-punkte", "button-neue-runde",
     "button-about", "button-einstellungen", "einstellungen",
     "einstellungen-zu", "einstellungen-fertig", "button-reset",
     "eltern-dialog", "eltern-frage", "eltern-antworten", "eltern-abbrechen",
@@ -119,9 +145,11 @@
       World = Matter.World, Events = Matter.Events;
 
   var engine = Engine.create();
-  engine.gravity.y = 1.5;                    // etwas flotter als Standard
   engine.positionIterations = 8;             // stabilere Kollisionen
   engine.velocityIterations = 6;
+
+  // Schwerkraft je nach gewaehlter Schwierigkeit setzen
+  function wendeSchwierigkeitAn() { engine.gravity.y = K().gravitation; }
 
   var kugel = null;                          // der aktuelle Ball (oder null)
 
@@ -135,12 +163,21 @@
     });
   }
 
-  // --- Feste Waende: Seiten, oben eine runde Kuppel, unten Einlauf-Schraegen
+  // --- Feste Waende: Seiten, oben eine runde Kuppel, unten Einlauf-
+  //     Schraegen. Rechts liegt die ABSCHUSS-GASSE (wie beim echten
+  //     Flipper): Trennwand + Gassen-Boden; die Kugel wartet dort auf den
+  //     Abschuss-Knopf. Die Einlauf-Schraegen enden DIREKT an den Flipper-
+  //     Drehpunkten, damit keine Kugel-Falle entsteht.
   var waende = [
-    wandSegment(4, 120, 4, 445, 24),         // linke Wand
-    wandSegment(396, 120, 396, 445, 24),     // rechte Wand
-    wandSegment(4, 445, PIVOT_L.x - 8, PIVOT_L.y + 6, 16),   // Einlauf links
-    wandSegment(396, 445, PIVOT_R.x + 8, PIVOT_R.y + 6, 16), // Einlauf rechts
+    wandSegment(4, 120, 4, 445, 24),                    // linke Wand
+    wandSegment(396, 120, 396, 516, 24),                // rechte Wand (bis Gassen-Boden)
+    wandSegment(4, 445, PIVOT_L.x, PIVOT_L.y, 16),      // Einlauf links
+    wandSegment(GASSE_X, 448, PIVOT_R.x, PIVOT_R.y, 16),// Einlauf rechts
+    wandSegment(GASSE_X, 190, GASSE_X, 508, 8),         // Gassen-Trennwand
+    wandSegment(GASSE_X, 196, 338, 170, 8),             // Abweiser oben (lenkt zurueckfallende Kugeln ins Feld)
+    wandSegment(348, 508, 398, 514, 14),                // Gassen-Boden (leicht schraeg -> Kugel rollt an die Wand)
+    wandSegment(104, 530, 104, 600, 12),                // Abfluss-Kanal links
+    wandSegment(296, 530, 296, 600, 12),                // Abfluss-Kanal rechts
     // unsichtbare Decke knapp ueber dem Sichtbereich: haelt die Kugel im Bild
     Bodies.rectangle(200, -18, 420, 20, { isStatic: true, label: "wand" })
   ];
@@ -169,9 +206,11 @@
   // --- Tore: drei "Tuerchen" (abgerundete Kloetze) an Kuppel und Seiten.
   //     Das obere ist MINIMAL geneigt, damit die Kugel nicht darauf
   //     liegen bleiben kann, sondern immer herunterrollt.
+  //     Die seitlichen Tore liegen BUENDIG an ihrer Wand (leicht ueberlappend):
+  //     bleibt ein schmaler Spalt, kann sich die Kugel dort einklemmen.
   [{ x: 200, y: 96, winkel: 0.08 },
-   { x: 52,  y: 330, winkel:  0.42 },
-   { x: 348, y: 330, winkel: -0.42 }]
+   { x: 44,  y: 330, winkel:  0.42 },
+   { x: 320, y: 330, winkel: -0.42 }]
     .forEach(function (p, i) {
       var body = Bodies.rectangle(p.x, p.y, 58, 22, {
         isStatic: true, angle: p.winkel, label: "tor-" + i, chamfer: { radius: 8 }
@@ -187,7 +226,7 @@
   var slings = [];
   [
     [{ x: 98, y: 396 }, { x: 138, y: 460 }, { x: 98, y: 460 }],
-    [{ x: 302, y: 396 }, { x: 262, y: 460 }, { x: 302, y: 460 }]
+    [{ x: 298, y: 392 }, { x: 258, y: 452 }, { x: 298, y: 452 }]
   ].forEach(function (ecken, i) {
     var body = Bodies.fromVertices(0, 0, [ecken], { isStatic: true, label: "sling-" + i });
     // fromVertices zentriert die Form – wieder an die richtige Stelle ruecken
@@ -292,12 +331,15 @@
     return true;
   }
 
+  var klammerPauseBis = 0;   // kurz nach dem Abschuss gilt der Deckel nicht
+
   function begrenzeTempo() {
-    if (!kugel) { return; }
+    if (!kugel || performance.now() < klammerPauseBis) { return; }
+    var deckel = K().maxTempo;
     var v = kugel.velocity, tempo = Math.hypot(v.x, v.y);
-    if (tempo > KUGEL_MAX_TEMPO) {
-      Body.setVelocity(kugel, { x: v.x / tempo * KUGEL_MAX_TEMPO,
-                                y: v.y / tempo * KUGEL_MAX_TEMPO });
+    if (tempo > deckel) {
+      Body.setVelocity(kugel, { x: v.x / tempo * deckel,
+                                y: v.y / tempo * deckel });
     }
   }
 
@@ -332,7 +374,7 @@
     var hebelX = kugel.position.x - f.pivot.x;
     var hebelY = kugel.position.y - f.pivot.y;
     // omega ist in "Winkel pro Schritt"; rechts dreht der Arm andersherum
-    var omega = f.omega * (f.seite < 0 ? 1 : -1) * 60 * 0.9;
+    var omega = f.omega * (f.seite < 0 ? 1 : -1) * 60 * K().flipperKraft;
     Body.setVelocity(kugel, {
       x: kugel.velocity.x + (-omega * hebelY) * 0.016,
       y: kugel.velocity.y + ( omega * hebelX) * 0.016 - 2.5
@@ -354,9 +396,11 @@
     // Kick: Kugel radial vom Pilz wegschubsen
     var dx = kugel.position.x - e.x, dy = kugel.position.y - e.y;
     var d = Math.hypot(dx, dy) || 1;
-    Body.setVelocity(kugel, { x: dx / d * 11, y: dy / d * 11 });
+    var kick = K().bumperKick;
+    Body.setVelocity(kugel, { x: dx / d * kick, y: dy / d * kick });
     gibPunkte(PUNKTE_BUMPER);
     spielKlang("bumper");
+    spawnFunken(e.x, e.y, "#f3c44a");
     zeigeSymbol(e.symbol);
     pruefeMission(e);
   }
@@ -367,6 +411,7 @@
     e.blitzZeit = performance.now();
     gibPunkte(PUNKTE_TOR);
     spielKlang("tor");
+    spawnFunken(e.x, e.y, "#2f6fd6");
     zeigeSymbol(e.symbol);
     pruefeMission(e);
   }
@@ -377,7 +422,7 @@
     s.blitzZeit = performance.now();
     // zur Feldmitte hoch schubsen
     var richtung = body.label === "sling-0" ? 1 : -1;
-    Body.setVelocity(kugel, { x: richtung * 6, y: -9 });
+    Body.setVelocity(kugel, { x: richtung * K().sling.x, y: K().sling.y });
     gibPunkte(PUNKTE_SLING);
     spielKlang("sling");
   }
@@ -495,21 +540,59 @@
   });
 
 
-  /* 7. KUGEL-VERWALTUNG ----------------------------------------------------- */
+  /* 7. KUGEL-VERWALTUNG ------------------------------------------------------
+     Wie beim echten Flipper: die neue Kugel liegt in der Abschuss-Gasse
+     rechts und wartet auf den grossen 🚀-Knopf. Faellt eine Kugel spaeter
+     in die Gasse zurueck, erscheint der Knopf einfach wieder. */
+
+  var abschussHinweise = 0;      // Sprach-Tipp nur die ersten Male
 
   function neueKugel() {
     if (kugel) { World.remove(engine.world, kugel); }
-    kugel = Bodies.circle(200 + zufallGanzzahl(-40, 40), 60, KUGEL_RADIUS, {
+    kugel = Bodies.circle(373, 486, KUGEL_RADIUS, {
       label: "kugel",
       restitution: 0.45,
       friction: 0.002,
-      frictionAir: 0.004,
+      frictionAir: 0.006,
       density: 0.0022
     });
-    Body.setVelocity(kugel, { x: zufallGanzzahl(-3, 3), y: 2 });
     World.add(engine.world, kugel);
+    kugelSpur = [];
     state.kugelUnterwegs = true;
-    spielKlang("start");
+    macheAbschussBereit();
+  }
+
+  function macheAbschussBereit() {
+    state.wartetAufAbschuss = true;
+    el.buttonAbschuss.hidden = false;
+    if (abschussHinweise < 2) {
+      abschussHinweise++;
+      sprich("Drück den roten Knopf und schieß die Kugel ab!");
+    }
+  }
+
+  function schiesseKugelAb() {
+    if (!kugel || !state.wartetAufAbschuss) { return; }
+    state.wartetAufAbschuss = false;
+    el.buttonAbschuss.hidden = true;
+    weckeAudio();
+    // Der Tempodeckel pausiert kurz, damit der Abschuss volle Kraft hat
+    klammerPauseBis = performance.now() + 900;
+    Body.setVelocity(kugel, { x: -0.4, y: -(K().abschuss + Math.random()) });
+    spielKlang("abschuss");
+  }
+  el.buttonAbschuss.addEventListener("pointerdown", function (e) {
+    e.preventDefault();
+    schiesseKugelAb();
+  });
+
+  // Liegt die Kugel (wieder) ruhig in der Gasse? -> Abschuss-Knopf zeigen
+  function pruefeGasse() {
+    if (!kugel || !state.kugelUnterwegs || state.wartetAufAbschuss) { return; }
+    var tempo = Math.hypot(kugel.velocity.x, kugel.velocity.y);
+    if (kugel.position.x > GASSE_X && kugel.position.y > 455 && tempo < 0.9) {
+      macheAbschussBereit();
+    }
   }
 
   // Anti-Klemm-Sicherung: steht die Kugel laenger als ~3 Sekunden fast
@@ -517,12 +600,14 @@
   // Richtung Feldmitte. So kann NIE dauerhaft Stillstand entstehen.
   var stillstandSeit = 0;
   function pruefeStillstand() {
-    if (!kugel || !state.kugelUnterwegs) { stillstandSeit = 0; return; }
+    if (!kugel || !state.kugelUnterwegs || state.wartetAufAbschuss) {
+      stillstandSeit = 0; return;
+    }
     var tempo = Math.hypot(kugel.velocity.x, kugel.velocity.y);
-    // Auf den Flipper-Armen darf sie ruhig liegen (das Kind zielt gerade)
-    var aufFlipper = kugel.position.y > 480 &&
-                     kugel.position.x > 90 && kugel.position.x < 310;
-    if (tempo > 0.6 || aufFlipper) { stillstandSeit = 0; return; }
+    // Nur solange ein Flipper GEHALTEN wird, darf die Kugel dort ruhen
+    // (das Kind zielt gerade) - sonst wird jeder Stillstand aufgeloest.
+    var haeltFlipper = flipperL.gedrueckt || flipperR.gedrueckt;
+    if (tempo > 0.6 || haeltFlipper) { stillstandSeit = 0; return; }
     if (!stillstandSeit) { stillstandSeit = performance.now(); return; }
     if (performance.now() - stillstandSeit > 3000) {
       Body.setVelocity(kugel, {
@@ -541,13 +626,37 @@
       World.remove(engine.world, kugel);
       kugel = null;
       spielKlang("verloren");
-      if (state.spiegel) {
+      state.baelle = Math.max(0, state.baelle - 1);
+      el.anzeigeBaelle.textContent = state.baelle;
+      if (state.baelle === 0) {
+        zeigeRundenEnde();                   // Runde vorbei -> Feier + Bilanz
+      } else if (state.spiegel) {
         oeffneSpiegelSpiel();                // Minispiel -> danach neue Kugel
       } else {
         window.setTimeout(neueKugel, 900);
       }
     }
   }
+
+  // --- Rundenende: KEIN "Game Over", sondern eine Feier mit Punkte-Bilanz.
+  //     Ein Tipp auf den grossen Knopf startet die naechste Runde (der
+  //     Punktestand laeuft einfach weiter).
+  function zeigeRundenEnde() {
+    var rundenPunkte = state.punkte - state.rundenStartPunkte;
+    el.rundePunkte.textContent = rundenPunkte;
+    el.rundeOverlay.hidden = false;
+    werfeKonfetti();
+    spielKlang("erfolg");
+    sprich("Runde geschafft! Du hast " + rundenPunkte + " Punkte gesammelt!");
+  }
+  el.buttonNeueRunde.addEventListener("click", function () {
+    el.rundeOverlay.hidden = true;
+    state.baelle = BAELLE_PRO_RUNDE;
+    state.rundenStartPunkte = state.punkte;
+    el.anzeigeBaelle.textContent = state.baelle;
+    verteileSymbole();
+    neueKugel();
+  });
 
 
   /* 8. RENDERING -------------------------------------------------------------
@@ -576,54 +685,195 @@
     return d < 300 ? 1 - d / 300 : 0;
   }
 
+  // Funken-Partikel (kleine Feier bei jedem Treffer)
+  var funken = [];
+  function spawnFunken(x, y, farbe) {
+    for (var i = 0; i < 10; i++) {
+      funken.push({ x: x, y: y,
+                    vx: (Math.random() - 0.5) * 7,
+                    vy: -Math.random() * 5 - 1,
+                    leben: 1, farbe: farbe });
+    }
+  }
+  function malUndBewegeFunken() {
+    for (var i = funken.length - 1; i >= 0; i--) {
+      var p = funken[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.18; p.leben -= 0.045;
+      if (p.leben <= 0) { funken.splice(i, 1); continue; }
+      ctx.globalAlpha = p.leben;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3.2 * p.leben + 0.8, 0, Math.PI * 2);
+      ctx.fillStyle = p.farbe;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Kugel-Schweif: die letzten Positionen verblassen hinter der Kugel
+  var kugelSpur = [];
+
   function zeichneFeld() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, el.spielfeld.width, el.spielfeld.height);
     ctx.setTransform(skala, 0, 0, skala, versatzX, versatzY);
 
     zeichneHintergrund();
+    zeichneGasse();
     slings.forEach(zeichneSling);
     elemente.forEach(function (e) {
       if (e.art === "bumper") { zeichneBumper(e); } else { zeichneTor(e); }
     });
     zeichneFlipper(flipperL);
     zeichneFlipper(flipperR);
+    malUndBewegeFunken();
     if (kugel) { zeichneKugel(); }
+    zeichneVignette();
   }
 
-  // Spielfeld-Grund: heller Teppich mit Kuppel-Rand und Einlauf-Schraegen
+  // --- Spielfeld-Grund: dunkelblaues "Kabinett" mit Goldleiste, darin die
+  //     helle Spielflaeche. Rampen, Gasse und Abfluss sind Teil des Rahmens.
   function zeichneHintergrund() {
+    // 1) Kabinett (aussen): edles dunkles Blau wie das Missions-Schild
     ctx.beginPath();
-    feldUmriss();
-    var verlauf = ctx.createLinearGradient(0, 0, 0, FELD_H);
-    verlauf.addColorStop(0, "#ffffff");
-    verlauf.addColorStop(1, "#e9f0fc");
-    ctx.fillStyle = verlauf;
+    ctx.moveTo(0, FELD_H);
+    ctx.lineTo(0, 124);
+    ctx.arc(200, 124, 200, Math.PI, 0);
+    ctx.lineTo(400, FELD_H);
+    ctx.closePath();
+    var kab = ctx.createLinearGradient(0, 0, 0, FELD_H);
+    kab.addColorStop(0, "#2b4373");
+    kab.addColorStop(1, "#1d2c54");
+    ctx.fillStyle = kab;
     ctx.fill();
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = "#f3c44a";            // goldener Rand wie die Lernuhr
+
+    // 2) Spielflaeche (innen): warmes Creme mit Licht von oben
+    ctx.beginPath();
+    ctx.moveTo(16, FELD_H);
+    ctx.lineTo(16, 124);
+    ctx.arc(200, 124, 184, Math.PI, 0);
+    ctx.lineTo(384, FELD_H);
+    ctx.closePath();
+    var feld = ctx.createLinearGradient(0, -60, 0, FELD_H);
+    feld.addColorStop(0, "#fffdf6");
+    feld.addColorStop(0.55, "#f4f0e2");
+    feld.addColorStop(1, "#e7e9f2");
+    ctx.fillStyle = feld;
+    ctx.fill();
+    // Goldleiste zwischen Kabinett und Flaeche
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#f3c44a";
     ctx.stroke();
 
-    // sanfte Deko-Punkte (Platzhalter fuer eigenes Hintergrundbild)
+    // 3) Dezente Wiesen-Deko: Huegel + Bluemchen (Platzhalter fuer eigenes
+    //    Hintergrundbild - hier einfach drawImage() einsetzen)
+    ctx.fillStyle = "rgba(40, 192, 138, 0.08)";
+    ctx.beginPath(); ctx.ellipse(90, 470, 120, 46, 0, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(300, 480, 130, 52, 0, Math.PI, 0); ctx.fill();
     ctx.fillStyle = "rgba(47, 111, 214, 0.05)";
+    ctx.beginPath(); ctx.arc(200, 210, 92, 0, Math.PI * 2); ctx.fill();
+    [[70, 130], [330, 140], [160, 400], [240, 388]].forEach(function (b) {
+      zeichneBluemchen(b[0], b[1]);
+    });
+
+    // 4) Rampen unten (Teil des Rahmens): fuehren zur Flipper-Ebene
+    ctx.fillStyle = "#26375f";
+    ctx.beginPath();                          // links
+    ctx.moveTo(16, 445); ctx.lineTo(PIVOT_L.x, PIVOT_L.y);
+    ctx.lineTo(104, FELD_H); ctx.lineTo(16, FELD_H);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();                          // rechts (bis unter die Gasse)
+    ctx.moveTo(GASSE_X, 448); ctx.lineTo(PIVOT_R.x, PIVOT_R.y);
+    ctx.lineTo(296, FELD_H); ctx.lineTo(384, FELD_H);
+    ctx.lineTo(384, 514); ctx.lineTo(348, 508);
+    ctx.closePath(); ctx.fill();
+    // goldene Kante auf den Rampen
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#f3c44a";
+    ctx.beginPath();
+    ctx.moveTo(16, 445); ctx.lineTo(PIVOT_L.x, PIVOT_L.y);
+    ctx.moveTo(GASSE_X, 448); ctx.lineTo(PIVOT_R.x, PIVOT_R.y);
+    ctx.stroke();
+
+    // 5) Abfluss in der Mitte: dunkle Oeffnung ueber die volle Kanalbreite
+    ctx.beginPath();
+    ctx.ellipse(200, FELD_H + 4, 96, 38, 0, Math.PI, 0, true);
+    ctx.fillStyle = "#131f3e";
+    ctx.fill();
+  }
+
+  function zeichneBluemchen(x, y) {
     for (var i = 0; i < 5; i++) {
+      var a = i / 5 * Math.PI * 2;
       ctx.beginPath();
-      ctx.arc(60 + i * 70, 150 + (i % 2) * 220, 16, 0, Math.PI * 2);
+      ctx.arc(x + Math.cos(a) * 5, y + Math.sin(a) * 5, 3.4, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(243, 169, 60, 0.35)";
       ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(217, 69, 62, 0.4)";
+    ctx.fill();
+  }
+
+  // --- Abschuss-Gasse rechts: Trennwand, Pfeile und (beim Warten) die Feder
+  function zeichneGasse() {
+    // Trennwand mit runder Kappe + Abweiser
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#26375f";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(GASSE_X, 508); ctx.lineTo(GASSE_X, 190);
+    ctx.lineTo(338, 170);
+    ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#f3c44a";
+    ctx.beginPath();
+    ctx.moveTo(GASSE_X - 4, 505); ctx.lineTo(GASSE_X - 4, 192);
+    ctx.stroke();
+
+    // Pfeile in der Gasse (leuchten, wenn die Kugel wartet)
+    var puls = state.wartetAufAbschuss
+      ? 0.45 + 0.4 * Math.sin(performance.now() / 200) : 0.18;
+    ctx.fillStyle = "rgba(243, 196, 74, " + puls + ")";
+    [340, 280, 220].forEach(function (y) {
+      ctx.beginPath();
+      ctx.moveTo(370, y - 12);
+      ctx.lineTo(380, y + 4);
+      ctx.lineTo(360, y + 4);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // Feder unter der wartenden Kugel (kleine Zickzack-Spirale)
+    if (state.wartetAufAbschuss && kugel) {
+      var oben = kugel.position.y + KUGEL_RADIUS + 2;
+      ctx.strokeStyle = "#d9453e";
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      var y0 = 505;
+      var stufen = 5, hoehe = (y0 - oben) / stufen;
+      ctx.moveTo(373, y0);
+      for (var i = 0; i < stufen; i++) {
+        ctx.lineTo(i % 2 === 0 ? 365 : 381, y0 - hoehe * (i + 0.5));
+      }
+      ctx.lineTo(373, oben);
+      ctx.stroke();
     }
   }
 
-  // Umriss des Felds (Kuppel + Seiten + Einlauf + Abfluss) als Pfad
-  function feldUmriss() {
-    ctx.moveTo(4, 445);
-    ctx.lineTo(4, 124);
-    ctx.arc(200, 124, 196, Math.PI, 0);     // Kuppel
-    ctx.lineTo(396, 445);
-    ctx.lineTo(PIVOT_R.x + 8, PIVOT_R.y + 6);
-    ctx.lineTo(PIVOT_R.x + 8, FELD_H);
-    ctx.lineTo(PIVOT_L.x - 8, FELD_H);
-    ctx.lineTo(PIVOT_L.x - 8, PIVOT_L.y + 6);
+  // Sanfte Vignette: dunkelt die Raender minimal ab -> mehr Tiefe
+  function zeichneVignette() {
+    var v = ctx.createRadialGradient(200, 260, 150, 200, 300, 420);
+    v.addColorStop(0, "rgba(20, 30, 60, 0)");
+    v.addColorStop(1, "rgba(20, 30, 60, 0.13)");
+    ctx.beginPath();
+    ctx.moveTo(0, FELD_H);
+    ctx.lineTo(0, 124);
+    ctx.arc(200, 124, 200, Math.PI, 0);
+    ctx.lineTo(400, FELD_H);
     ctx.closePath();
+    ctx.fillStyle = v;
+    ctx.fill();
   }
 
   // Traegt dieses Element gerade die Mission? -> goldener Puls-Ring
@@ -636,7 +886,8 @@
     ctx.stroke();
   }
 
-  // --- Pilz-Bumper: roter Hut mit weissen Punkten, Symbol gross auf dem Hut
+  // --- Pilz-Bumper: schattierter roter Hut mit Glanzlicht und Tupfen,
+  //     Symbol auf einem weissen Schild in der Mitte
   function zeichneBumper(e) {
     var blitz = blitzWert(e.blitzZeit);
     var r = e.r + blitz * 5;                // ploppt beim Treffer kurz auf
@@ -645,38 +896,66 @@
       zeichneMissionsRing(e.x, e.y, e.r);
     }
 
-    // Stiel
-    ctx.fillStyle = "#f2e3c8";
+    // weicher Schlagschatten auf der Spielflaeche
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y + r * 0.95, r * 0.85, r * 0.28, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(30, 44, 82, 0.16)";
+    ctx.fill();
+
+    // Stiel mit leichtem Verlauf
+    var stiel = ctx.createLinearGradient(e.x - r * 0.4, 0, e.x + r * 0.4, 0);
+    stiel.addColorStop(0, "#efdcba");
+    stiel.addColorStop(0.5, "#f9efd8");
+    stiel.addColorStop(1, "#e3ceaa");
+    ctx.fillStyle = stiel;
     ctx.beginPath();
     ctx.ellipse(e.x, e.y + r * 0.55, r * 0.42, r * 0.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Hut (blitzt beim Treffer heller)
+    // Hut: Radialverlauf mit Lichtpunkt oben links (blitzt beim Treffer)
+    var hut = ctx.createRadialGradient(e.x - r * 0.35, e.y - r * 0.4, r * 0.15,
+                                       e.x, e.y, r);
+    if (blitz > 0) {
+      hut.addColorStop(0, "#ffb3a6"); hut.addColorStop(1, "#ff7a68");
+    } else {
+      hut.addColorStop(0, "#f4796a"); hut.addColorStop(1, "#c9402f");
+    }
     ctx.beginPath();
     ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = blitz > 0 ? "#ff7a68" : "#e0503f";
+    ctx.fillStyle = hut;
     ctx.fill();
     ctx.lineWidth = 3;
-    ctx.strokeStyle = "#b23a2c";
+    ctx.strokeStyle = "#a2352b";
+    ctx.stroke();
+
+    // Glanzbogen oben links
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, r * 0.78, Math.PI * 1.05, Math.PI * 1.45);
+    ctx.lineWidth = r * 0.14;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
     ctx.stroke();
 
     // weisse Tupfen
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    [[-0.55, -0.35, 0.16], [0.45, -0.5, 0.13], [0.15, 0.55, 0.12]].forEach(function (t) {
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    [[-0.55, -0.35, 0.15], [0.5, -0.45, 0.12], [0.1, 0.6, 0.11]].forEach(function (t) {
       ctx.beginPath();
       ctx.arc(e.x + t[0] * r, e.y + t[1] * r, t[2] * r, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    // helles Schild in der Mitte mit dem Symbol
+    // weisses Schild in der Mitte mit Goldrand + Symbol
     ctx.beginPath();
     ctx.arc(e.x, e.y, r * 0.62, 0, Math.PI * 2);
     ctx.fillStyle = "#ffffff";
     ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "#f3c44a";
+    ctx.stroke();
     zeichneSymbol(e.symbol, e.x, e.y, r * 0.8);
   }
 
-  // --- Tor: abgerundetes Tuerchen mit Symbol
+  // --- Tor: goldgerahmtes Tuerchen mit sanftem Verlauf und Symbol
   function zeichneTor(e) {
     var blitz = blitzWert(e.blitzZeit);
     if (state.mission && state.mission.element === e) {
@@ -685,11 +964,26 @@
     ctx.save();
     ctx.translate(e.x, e.y);
     ctx.rotate(e.winkel);
+    // Schlagschatten
+    ctx.beginPath();
+    abgerundetesRechteck(-e.w / 2 + 2, -e.h / 2 + 4, e.w, e.h, 9);
+    ctx.fillStyle = "rgba(30, 44, 82, 0.18)";
+    ctx.fill();
+    // Tuerchen mit Verlauf
+    var tuer = ctx.createLinearGradient(0, -e.h / 2, 0, e.h / 2);
+    if (blitz > 0) {
+      tuer.addColorStop(0, "#fff3d6"); tuer.addColorStop(1, "#ffe2a6");
+    } else {
+      tuer.addColorStop(0, "#ffffff"); tuer.addColorStop(1, "#e8edfa");
+    }
     ctx.beginPath();
     abgerundetesRechteck(-e.w / 2, -e.h / 2, e.w, e.h, 9);
-    ctx.fillStyle = blitz > 0 ? "#ffe9c4" : "#ffffff";
+    ctx.fillStyle = tuer;
     ctx.fill();
     ctx.lineWidth = 3.5;
+    ctx.strokeStyle = "#f3c44a";
+    ctx.stroke();
+    ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#2b4373";
     ctx.stroke();
     ctx.restore();
@@ -742,15 +1036,28 @@
 
   function zeichneSling(s) {
     var blitz = blitzWert(s.blitzZeit);
+    var verlauf = ctx.createLinearGradient(0, s.ecken[0].y, 0, s.ecken[2].y);
+    if (blitz > 0) {
+      verlauf.addColorStop(0, "#ffe9b0"); verlauf.addColorStop(1, "#ffd27f");
+    } else {
+      verlauf.addColorStop(0, "#f8d876"); verlauf.addColorStop(1, "#e9b23a");
+    }
     ctx.beginPath();
     ctx.moveTo(s.ecken[0].x, s.ecken[0].y);
     ctx.lineTo(s.ecken[1].x, s.ecken[1].y);
     ctx.lineTo(s.ecken[2].x, s.ecken[2].y);
     ctx.closePath();
-    ctx.fillStyle = blitz > 0 ? "#ffd27f" : "#f3c44a";
+    ctx.fillStyle = verlauf;
     ctx.fill();
     ctx.lineWidth = 3;
-    ctx.strokeStyle = "#d9a92f";
+    ctx.strokeStyle = blitz > 0 ? "#f3c44a" : "#c99427";
+    ctx.stroke();
+    // Gummiband-Linie an der Schraege (typisches Flipper-Detail)
+    ctx.beginPath();
+    ctx.moveTo(s.ecken[0].x, s.ecken[0].y);
+    ctx.lineTo(s.ecken[1].x, s.ecken[1].y);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "rgba(217, 69, 62, 0.85)";
     ctx.stroke();
   }
 
@@ -759,35 +1066,86 @@
     ctx.save();
     ctx.translate(f.pivot.x, f.pivot.y);
     ctx.rotate(a);
-    // Arm als Kapsel: links BLAU, rechts ROT (wie die Touch-Zonen)
+    // Schlagschatten unter dem Arm
+    ctx.beginPath();
+    abgerundetesRechteck(-4, -FLIPPER_DICKE / 2 + 4, FLIPPER_LAENGE + 4,
+                         FLIPPER_DICKE, FLIPPER_DICKE / 2 - 1);
+    ctx.fillStyle = "rgba(30, 44, 82, 0.20)";
+    ctx.fill();
+    // Arm als Kapsel mit Verlauf: links BLAU, rechts ROT (wie die Zonen)
+    var arm = ctx.createLinearGradient(0, -FLIPPER_DICKE / 2, 0, FLIPPER_DICKE / 2);
+    if (f.seite < 0) { arm.addColorStop(0, "#5a92e8"); arm.addColorStop(1, "#2456ab"); }
+    else             { arm.addColorStop(0, "#ef7a6e"); arm.addColorStop(1, "#b2372c"); }
     ctx.beginPath();
     abgerundetesRechteck(-4, -FLIPPER_DICKE / 2, FLIPPER_LAENGE + 4,
                          FLIPPER_DICKE, FLIPPER_DICKE / 2 - 1);
-    ctx.fillStyle = f.seite < 0 ? "#2f6fd6" : "#d9453e";
+    ctx.fillStyle = arm;
     ctx.fill();
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2.5;
     ctx.strokeStyle = f.seite < 0 ? "#1e4b96" : "#a2352b";
     ctx.stroke();
+    // Glanzlinie oben auf dem Arm
+    ctx.beginPath();
+    ctx.moveTo(4, -FLIPPER_DICKE / 2 + 4.5);
+    ctx.lineTo(FLIPPER_LAENGE - 10, -FLIPPER_DICKE / 2 + 4.5);
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(255,255,255,0.45)";
+    ctx.stroke();
     ctx.restore();
-    // Drehpunkt-Kappe
+    // Drehpunkt: goldene "Schraube", halb im Rahmen versenkt
     ctx.beginPath();
     ctx.arc(f.pivot.x, f.pivot.y, 8, 0, Math.PI * 2);
-    ctx.fillStyle = "#36456f";
+    ctx.fillStyle = "#f3c44a";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#c99427";
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(f.pivot.x, f.pivot.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "#26375f";
     ctx.fill();
   }
 
   function zeichneKugel() {
     var p = kugel.position;
-    var verlauf = ctx.createRadialGradient(p.x - 4, p.y - 4, 2, p.x, p.y, KUGEL_RADIUS);
+
+    // Schweif: letzte Positionen verblassen hinter der Kugel
+    kugelSpur.push({ x: p.x, y: p.y });
+    if (kugelSpur.length > 7) { kugelSpur.shift(); }
+    kugelSpur.forEach(function (s, i) {
+      ctx.globalAlpha = (i + 1) / kugelSpur.length * 0.18;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, KUGEL_RADIUS * (0.5 + i / kugelSpur.length * 0.4), 0, Math.PI * 2);
+      ctx.fillStyle = "#8fa8d8";
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // kleiner Schatten unter der Kugel
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y + KUGEL_RADIUS * 0.9, KUGEL_RADIUS * 0.8,
+                KUGEL_RADIUS * 0.3, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(30, 44, 82, 0.18)";
+    ctx.fill();
+
+    // Metall-Optik: heller Lichtpunkt oben links, dunkler Rand
+    var verlauf = ctx.createRadialGradient(p.x - 4, p.y - 5, 1.5, p.x, p.y, KUGEL_RADIUS);
     verlauf.addColorStop(0, "#ffffff");
-    verlauf.addColorStop(1, "#9fb0d4");
+    verlauf.addColorStop(0.4, "#dfe7f6");
+    verlauf.addColorStop(1, "#8d9fc6");
     ctx.beginPath();
     ctx.arc(p.x, p.y, KUGEL_RADIUS, 0, Math.PI * 2);
     ctx.fillStyle = verlauf;
     ctx.fill();
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#5f6e96";
     ctx.stroke();
+    // Glanzpunkt
+    ctx.beginPath();
+    ctx.arc(p.x - 3.5, p.y - 4, 2.4, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.fill();
   }
 
   // --- Game-Loop: Physik in festen Schritten, dann zeichnen -----------------
@@ -804,6 +1162,7 @@
     Engine.update(engine, dt / 2);
     Engine.update(engine, dt / 2);
     begrenzeTempo();
+    pruefeGasse();
     pruefeStillstand();
     pruefeKugelVerlust();
     zeichneFeld();
@@ -1018,6 +1377,7 @@
       mission:      { toene: [523.25, 659.25, 880], art: "triangle", laut: 0.2,  dauer: 0.18 },
       erfolg:       { toene: [523.25, 659.25, 783.99, 1046.5], art: "triangle", laut: 0.24, dauer: 0.2 },
       start:        { toene: [392, 523.25],         art: "sine",     laut: 0.16, dauer: 0.14 },
+      abschuss:     { toene: [196, 392, 587.33],    art: "square",   laut: 0.14, dauer: 0.12 },
       verloren:     { toene: [330, 262],            art: "sine",     laut: 0.14, dauer: 0.22 },
       spiegelpunkt: { toene: [740 + Math.random() * 160], art: "sine", laut: 0.1, dauer: 0.07 }
     };
@@ -1054,11 +1414,15 @@
     window.setTimeout(function () { el.titelscreen.hidden = true; }, 500);
     weckeAudio();
     state.laeuft = true;
+    state.baelle = BAELLE_PRO_RUNDE;
+    state.rundenStartPunkte = state.punkte;
+    el.anzeigeBaelle.textContent = state.baelle;
+    wendeSchwierigkeitAn();
     passeCanvasAn();
     verteileSymbole();
+    planeMission(6000);
+    sprich("Willkommen in der Pilz-Arena!");
     neueKugel();
-    planeMission(5000);
-    sprich("Willkommen in der Pilz-Arena! Halte die Kugel mit den bunten Knöpfen im Spiel!");
   });
 
   // --- Konfetti (rein DOM/CSS, respektiert Reduced Motion)
@@ -1099,6 +1463,9 @@
   el.statSterne.addEventListener("click", function () {
     zeigePopover("⭐ Deine <b>Sterne</b>: Für jede geschaffte Mission gibt es einen Stern!", el.statSterne);
   });
+  el.statBaelle.addEventListener("click", function () {
+    zeigePopover("🎱 Deine <b>Kugeln</b>: So viele Kugeln hast du noch in dieser Runde!", el.statBaelle);
+  });
 
   // --- Einstellungen: Karten togglen + speichern
   function markiereEinstellungen() {
@@ -1106,6 +1473,7 @@
       var s = karte.dataset.setting, w = karte.dataset.wert;
       var aktiv =
         (s === "symbole" && state.symbole === w) ||
+        (s === "schwierigkeit" && state.schwierigkeit === w) ||
         (s === "spiegel" && state.spiegel === (w === "an")) ||
         (s === "toene"   && state.toene   === (w === "an")) ||
         (s === "sprache" && state.sprache === (w === "an"));
@@ -1121,6 +1489,10 @@
         state.mission = null;                // alte Mission passt nicht mehr
         el.missionText.textContent = "Los geht’s!";
         planeMission(4000);
+      }
+      if (s === "schwierigkeit" && SCHWIERIGKEITEN[w]) {
+        state.schwierigkeit = w;
+        wendeSchwierigkeitAn();              // wirkt sofort auf die Kugel
       }
       if (s === "spiegel") { state.spiegel = (w === "an"); }
       if (s === "toene")   { state.toene   = (w === "an"); }
@@ -1179,7 +1551,8 @@
     try {
       window.localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify({
         punkte: state.punkte, sterne: state.sterne, symbole: state.symbole,
-        spiegel: state.spiegel, toene: state.toene, sprache: state.sprache
+        schwierigkeit: state.schwierigkeit, spiegel: state.spiegel,
+        toene: state.toene, sprache: state.sprache
       }));
     } catch (fehler) { /* privater Modus o.ae. - dann eben ohne Speichern */ }
   }
@@ -1191,6 +1564,7 @@
       if (typeof d.punkte === "number") { state.punkte = d.punkte; }
       if (typeof d.sterne === "number") { state.sterne = d.sterne; }
       if (typeof d.symbole === "string") { state.symbole = d.symbole; }
+      if (SCHWIERIGKEITEN[d.schwierigkeit]) { state.schwierigkeit = d.schwierigkeit; }
       if (typeof d.spiegel === "boolean") { state.spiegel = d.spiegel; }
       if (typeof d.toene === "boolean") { state.toene = d.toene; }
       if (typeof d.sprache === "boolean") { state.sprache = d.sprache; }
@@ -1208,6 +1582,8 @@
 
   // --- Los geht's
   ladeStand();
+  wendeSchwierigkeitAn();
+  el.anzeigeBaelle.textContent = state.baelle;
   passeCanvasAn();
   verteileSymbole();
   zeichneFeld();                             // Standbild hinter dem Titel

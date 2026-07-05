@@ -303,6 +303,105 @@ body {
 }
 
 
+/* Abschuss-Knopf: grosser roter Ausloeser unten rechts ueber der Gasse.
+   Pulsiert sanft, damit das Kind sofort weiss, wo es druecken muss. */
+.abschuss-button {
+  position: absolute;
+  right: clamp(8px, 4vw, 26px);
+  bottom: clamp(8px, 2vh, 18px);
+  width: clamp(76px, 12vh, 96px);
+  height: clamp(76px, 12vh, 96px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border: 4px solid #ffffff;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ef7a6e, var(--zone-rechts) 70%);
+  box-shadow: 0 10px 26px rgba(217, 69, 62, 0.45);
+  cursor: pointer;
+  animation: abschuss-puls 1.3s ease-in-out infinite;
+  touch-action: none;
+  z-index: 3;
+}
+.abschuss-button[hidden] { display: none; }
+.abschuss-button:active { transform: scale(0.92); animation: none; }
+.abschuss-icon { font-size: clamp(1.7rem, 4.4vh, 2.2rem); line-height: 1.1; }
+.abschuss-text {
+  font-family: var(--font-display);
+  font-size: clamp(0.85rem, 2vh, 1.05rem);
+  font-weight: 800;
+  color: #ffffff;
+}
+@keyframes abschuss-puls {
+  0%, 100% { transform: scale(1);    box-shadow: 0 10px 26px rgba(217, 69, 62, 0.45); }
+  50%      { transform: scale(1.07); box-shadow: 0 12px 34px rgba(217, 69, 62, 0.65); }
+}
+
+
+/* Runden-Ende-Overlay: Feier statt Game Over */
+.runde-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(20, 34, 70, 0.55);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.runde-overlay[hidden] { display: none; }
+.runde-karte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border-radius: 26px;
+  box-shadow: var(--sh-soft);
+  padding: 28px 22px 22px;
+  text-align: center;
+  animation: runde-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.runde-pokal {
+  font-size: clamp(3.4rem, 16vw, 5rem);
+  line-height: 1.1;
+  filter: drop-shadow(0 10px 18px rgba(243, 196, 74, 0.5));
+}
+.runde-titel {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 7.5vw, 2.1rem);
+  color: var(--ink);
+}
+.runde-bilanz { color: var(--muted); font-size: 1.05rem; }
+.runde-bilanz b { color: var(--ink); font-size: 1.3rem; }
+.runde-weiter {
+  margin-top: 10px;
+  width: 100%;
+  min-height: 60px;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(180deg, var(--cta), var(--cta-deep));
+  border: none;
+  border-radius: 18px;
+  box-shadow: 0 10px 22px rgba(20, 158, 114, 0.35);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.runde-weiter:active { transform: translateY(3px); }
+@keyframes runde-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+
 /* 6) FLIPPER-ZONEN ------------------------------------------------------------
    Zwei riesige Knoepfe am unteren Rand: links BLAU, rechts ROT. Gedrueckt
    halten hebt den jeweiligen Flipper-Arm. Bewusst hoch (>= 96px), damit
@@ -725,7 +824,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .konfetti, .titel-frosch, .titel-tipp, .mission-schild.neu,
   .mission-schild.geschafft, .symbol-blitz.zeigt, .lob-banner.zeigt,
-  .stat.plopp {
+  .stat.plopp, .abschuss-button, .runde-karte {
     animation: none !important;
     transition: none !important;
   }
