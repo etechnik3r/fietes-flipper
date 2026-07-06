@@ -277,13 +277,20 @@
   // --- Tore: drei "Tuerchen" (abgerundete Kloetze) an Kuppel und Seiten.
   //     Das obere ist MINIMAL geneigt, damit die Kugel nicht darauf
   //     liegen bleiben kann, sondern immer herunterrollt.
-  //     Die seitlichen Tore liegen deutlich staerker geneigt und mit mehr
-  //     Ueberlappung an ihrer Wand als frueher: ein schmaler, fast
-  //     paralleler Spalt zur Wand liess die Kugel dort in einer schnellen
-  //     Ping-Pong-Schleife haengen bleiben.
+  //     Die seitlichen Tore stehen um 90 Grad gedreht: die lange Seite
+  //     (62) verlaeuft SENKRECHT, genau parallel zur jeweils benachbarten
+  //     senkrechten Wand, und liegt buendig daran an - aber innerhalb der
+  //     Goldlinie/Gassen-Trennwand, ragt also nicht ins Kabinett bzw. in
+  //     die Abschuss-Gasse hinein. Links ist die Nachbar-Wand die AEUSSERE
+  //     Feldwand (x=4); rechts ist es NICHT die aeussere Wand, sondern die
+  //     Gassen-Trennwand (GASSE_X) - ragt das Tor darueber hinaus, blockiert
+  //     es die Abschuss-Gasse komplett. Vorher waren die Tore schraeg
+  //     angestellt; der daraus entstehende schmale, fast parallele Spalt zur
+  //     Wand liess die Kugel dort in einer schnellen Ping-Pong-Schleife
+  //     haengen bleiben.
   [{ x: 200, y: 88, winkel: 0.08 },
-   { x: 36,  y: 336, winkel:  0.52 },
-   { x: 328, y: 336, winkel: -0.52 }]
+   { x: 30, y: 336, winkel: Math.PI / 2 },
+   { x: GASSE_X - 15, y: 336, winkel: -Math.PI / 2 }]
     .forEach(function (p, i) {
       var body = Bodies.rectangle(p.x, p.y, 62, 30, {
         isStatic: true, angle: p.winkel, label: "tor-" + i, chamfer: { radius: 10 }
@@ -737,6 +744,7 @@
 
   function neueKugel() {
     if (kugel) { World.remove(engine.world, kugel); }
+    wartetAufGassenAustritt = false;
     kugel = Bodies.circle(373, 486, KUGEL_RADIUS, {
       label: "kugel",
       restitution: 0.45,
@@ -765,6 +773,7 @@
   //     kaum raus; lange gehalten -> voller Schuss.
   var LADE_ZEIT = 900;                 // ms bis zur vollen Kraft
   var ladung = { aktiv: false, start: 0, wert: 0 };
+  var wartetAufGassenAustritt = false; // true zwischen Abschuss und Verlassen der Gasse oben
 
   // 0..1: aktueller Ladestand (fuers Zeichnen der Kraftanzeige)
   function ladeStand() {
@@ -799,8 +808,30 @@
     // Der Tempodeckel pausiert kurz, damit der Abschuss volle Kraft hat
     klammerPauseBis = performance.now() + 900;
     var kraft = K().abschussMin + t * (K().abschussMax - K().abschussMin);
-    Body.setVelocity(kugel, { x: -0.4, y: -kraft });
+    Body.setVelocity(kugel, { x: -0.6, y: -kraft });
+    // Solange die Kugel noch INNERHALB der Gassen-Trennwand hochsteigt
+    // (y >= etwa 190), darf sie kaum seitlich schubsen - sonst prallt sie
+    // sofort von der Trennwand zurueck in die Gasse. Den entscheidenden
+    // Schubs nach links ins Feld gibt pruefeGassenAustritt() erst, sobald
+    // sie oben aus der Gasse heraus ist (s.u.).
+    wartetAufGassenAustritt = true;
     spielKlang("abschuss");
+  }
+
+  // Wird jeden Frame geprueft, waehrend eine Kugel gerade abgeschossen
+  // wurde: Sobald sie oben ueber die Gassen-Trennwand hinausgekommen ist
+  // (Trennwand endet bei y=190), gibt es JETZT einen kraeftigen Schubs nach
+  // links ins Feld - vorher wuerde der Schubs sie nur gegen die Trennwand
+  // drücken und direkt in die Gasse zurueckprallen lassen.
+  function pruefeGassenAustritt() {
+    if (!wartetAufGassenAustritt || !kugel) { return; }
+    if (kugel.position.y < 182) {
+      Body.setVelocity(kugel, { x: -4.4, y: kugel.velocity.y });
+      wartetAufGassenAustritt = false;
+    } else if (kugel.position.y > 520 || kugel.velocity.y > -0.5) {
+      // wieder unten gelandet oder Schwung verloren, ohne oben rauszukommen
+      wartetAufGassenAustritt = false;
+    }
   }
   el.buttonAbschuss.addEventListener("pointerdown", starteLaden);
   el.buttonAbschuss.addEventListener("pointerup", schiesseKugelAb);
@@ -1676,6 +1707,7 @@
     Engine.update(engine, dt / 2);
     begrenzeTempo();
     pruefeGasse();
+    pruefeGassenAustritt();
     pruefeStillstand();
     pruefeEingeklemmt();
     pruefeKugelVerlust();
