@@ -403,6 +403,41 @@
     return true;
   }
 
+  // Radialer Kick weg vom Element-Mittelpunkt, mit etwas Streuung in Winkel
+  // + Staerke: ein perfekt gleicher Kick bei jedem Treffer erzeugt zwischen
+  // zwei nahen Elementen (z. B. Bumper <-> Tor) leicht eine stabile
+  // Ping-Pong-Schleife, in der die Kugel 20, 30, 40 Mal hin- und herspringt.
+  // Die kleine Zufalls-Streuung reicht meist schon, um das zu verhindern.
+  function radialerKick(e, staerke) {
+    var dx = kugel.position.x - e.x, dy = kugel.position.y - e.y;
+    var winkel = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.3;
+    var kick = staerke * (0.92 + Math.random() * 0.16);
+    Body.setVelocity(kugel, { x: Math.cos(winkel) * kick, y: Math.sin(winkel) * kick });
+  }
+
+  // Zusaetzliche Sicherung gegen genau so eine Ping-Pong-Schleife: wenn die
+  // Kugel zuletzt viermal stur zwischen genau zwei Elementen hin- und
+  // hergesprungen ist (alles innerhalb von 2,5 s), ist die Streuung oben
+  // offenbar nicht genug gewesen - ein kraeftiger Schubs schraeg nach unten
+  // ins freie Feld loest die Schleife zuverlaessig auf.
+  var trefferVerlauf = [];   // kurze Historie: { label, zeit }
+  function merkeTrefferUndBrichResonanz(label) {
+    var jetzt = performance.now();
+    trefferVerlauf.push({ label: label, zeit: jetzt });
+    if (trefferVerlauf.length > 4) { trefferVerlauf.shift(); }
+    if (trefferVerlauf.length === 4) {
+      var v = trefferVerlauf;
+      var pingpong = v[0].label !== v[1].label &&
+        v[0].label === v[2].label && v[1].label === v[3].label &&
+        jetzt - v[0].zeit < 2500;
+      if (pingpong) {
+        trefferVerlauf = [];
+        var seitlich = (kugel.position.x < 200 ? 1 : -1) * (3 + Math.random() * 2);
+        Body.setVelocity(kugel, { x: seitlich, y: -4 - Math.random() * 3 });
+      }
+    }
+  }
+
   var klammerPauseBis = 0;   // kurz nach dem Abschuss gilt der Deckel nicht
 
   function begrenzeTempo() {
@@ -471,11 +506,8 @@
     if (!darfTreffen(body.label)) { return; }
     var e = elementZuLabel(body.label);
     e.blitzZeit = performance.now();
-    // Kick: Kugel radial vom Pilz wegschubsen
-    var dx = kugel.position.x - e.x, dy = kugel.position.y - e.y;
-    var d = Math.hypot(dx, dy) || 1;
-    var kick = K().bumperKick;
-    Body.setVelocity(kugel, { x: dx / d * kick, y: dy / d * kick });
+    radialerKick(e, K().bumperKick);
+    merkeTrefferUndBrichResonanz(body.label);
     gibPunkte(PUNKTE_BUMPER);
     spielKlang("bumper");
     spawnFunken(e.x, e.y, "#f3c44a");
@@ -488,12 +520,11 @@
     if (!darfTreffen(body.label)) { return; }
     var e = elementZuLabel(body.label);
     e.blitzZeit = performance.now();
-    // Kick wie beim Pilz-Bumper: ohne aktiven Schubs wirkt das rechteckige
-    // Tor "tot" (kaum Rueckprall) - etwas schwaecher als der Bumper-Kick.
-    var dx = kugel.position.x - e.x, dy = kugel.position.y - e.y;
-    var d = Math.hypot(dx, dy) || 1;
-    var kick = K().bumperKick * 0.85;
-    Body.setVelocity(kugel, { x: dx / d * kick, y: dy / d * kick });
+    // Etwas schwaecher als der Bumper-Kick: ganz ohne Schubs wirkt das
+    // rechteckige Tor "tot" (kaum Rueckprall), zu stark kickt es die Kugel
+    // aber in eine Ping-Pong-Schleife mit dem naechsten Bumper/Tor.
+    radialerKick(e, K().bumperKick * 0.55);
+    merkeTrefferUndBrichResonanz(body.label);
     gibPunkte(PUNKTE_TOR);
     spielKlang("tor");
     spawnFunken(e.x, e.y, "#2f6fd6");
@@ -506,9 +537,13 @@
     if (!darfTreffen(body.label)) { return; }
     var s = body.label === "sling-0" ? slings[0] : slings[1];
     s.blitzZeit = performance.now();
-    // zur Feldmitte hoch schubsen
+    // zur Feldmitte hoch schubsen, mit etwas Streuung (s. radialerKick oben)
     var richtung = body.label === "sling-0" ? 1 : -1;
-    Body.setVelocity(kugel, { x: richtung * K().sling.x, y: K().sling.y });
+    Body.setVelocity(kugel, {
+      x: richtung * K().sling.x + (Math.random() - 0.5) * 0.7,
+      y: K().sling.y * (0.94 + Math.random() * 0.1)
+    });
+    merkeTrefferUndBrichResonanz(body.label);
     gibPunkte(PUNKTE_SLING);
     spielKlang("sling");
   }
@@ -1106,21 +1141,24 @@
       ctx.fill();
     });
 
-    // Feder unter der wartenden Kugel (staucht sich mit dem Ladestand)
-    if (state.wartetAufAbschuss && kugel) {
-      var oben = kugel.position.y + KUGEL_RADIUS + 2;
-      var y0 = 505 - stand * 8;                 // laedt -> Feder staucht leicht
-      ctx.strokeStyle = "#d9453e";
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      var stufen = 5, hoehe = (y0 - oben) / stufen;
-      ctx.moveTo(373, y0);
-      for (var i = 0; i < stufen; i++) {
-        ctx.lineTo(i % 2 === 0 ? 365 : 381, y0 - hoehe * (i + 0.5));
-      }
-      ctx.lineTo(373, oben);
-      ctx.stroke();
+    // Feder am Fuss der Gasse: ist ein fester Teil des Abschuss-Mechanismus
+    // und daher IMMER zu sehen (eine echte Feder verschwindet ja nicht,
+    // nur weil gerade keine Kugel draufliegt) - staucht sich beim Laden
+    // und hebt/senkt sich mit der wartenden Kugel.
+    var federOben = (state.wartetAufAbschuss && kugel)
+      ? kugel.position.y + KUGEL_RADIUS + 2
+      : 440;                                 // voll ausgefahrene Ruheposition ohne Kugel
+    var federUnten = 505 - stand * 8;         // laedt -> Feder staucht leicht
+    ctx.strokeStyle = "#d9453e";
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    var stufen = 5, hoehe = (federUnten - federOben) / stufen;
+    ctx.moveTo(373, federUnten);
+    for (var i = 0; i < stufen; i++) {
+      ctx.lineTo(i % 2 === 0 ? 365 : 381, federUnten - hoehe * (i + 0.5));
     }
+    ctx.lineTo(373, federOben);
+    ctx.stroke();
   }
 
   // Sanfte Vignette: dunkelt die Raender minimal ab -> mehr Tiefe
