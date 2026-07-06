@@ -59,13 +59,18 @@
   // Drei Schwierigkeitsstufen (im Menue waehlbar): sie steuern NUR das
   // Kugeltempo (Schwerkraft, Tempodeckel, Staerke aller Kicks) – die
   // Lerninhalte bleiben gleich. Standard ist "leicht" (gemuetliche Kugel).
+  //
+  // TEMPO BEWUSST NIEDRIG + SANFTE STAFFELUNG: Selbst "leicht" bleibt richtig
+  // gemuetlich, und die Stufen wachsen nur in kleinen Schritten (kein harter
+  // Sprung). "abschussMin/Max" ist die Bandbreite des Plungers (siehe unten):
+  // kurz druecken -> schwach, lange halten -> kraeftig.
   var SCHWIERIGKEITEN = {
-    leicht:  { gravitation: 0.75, maxTempo: 11, bumperKick: 7.5,
-               sling: { x: 4.5, y: -7 },   abschuss: 15.5, flipperKraft: 0.75 },
-    mittel:  { gravitation: 1.0,  maxTempo: 14, bumperKick: 9.5,
-               sling: { x: 5.5, y: -8.5 }, abschuss: 19,   flipperKraft: 0.9 },
-    schnell: { gravitation: 1.3,  maxTempo: 17, bumperKick: 12,
-               sling: { x: 6.5, y: -10 },  abschuss: 22,   flipperKraft: 1.05 }
+    leicht:  { gravitation: 0.42, maxTempo: 7.5,  bumperKick: 5.4,
+               sling: { x: 3.2, y: -5.0 }, abschussMin: 8.5,  abschussMax: 15.0, flipperKraft: 0.58 },
+    mittel:  { gravitation: 0.54, maxTempo: 8.8,  bumperKick: 6.3,
+               sling: { x: 3.7, y: -5.8 }, abschussMin: 9.0,  abschussMax: 16.5, flipperKraft: 0.66 },
+    schnell: { gravitation: 0.68, maxTempo: 10.2, bumperKick: 7.4,
+               sling: { x: 4.3, y: -6.7 }, abschussMin: 9.5,  abschussMax: 18.0, flipperKraft: 0.76 }
   };
 
   // Punktwerte – bewusst simpel und grosszuegig
@@ -73,6 +78,19 @@
   var PUNKTE_SLING   = 5;
   var PUNKTE_TOR     = 25;
   var PUNKTE_MISSION = 100;
+  var PUNKTE_LOCH    = 50;   // Fang-Loch mit 3D-Koerper
+
+  // 3D-Koerper fuer das Fang-Loch: dort dreht sich ein Koerper; faengt das
+  // Loch die Kugel, wird sein Name vorgelesen (Lerneffekt) und der naechste
+  // Koerper kommt an die Reihe.
+  var KOERPER_3D = [
+    { id: "wuerfel",  name: "Würfel",   artikel: "der", farbe: "#2f6fd6" },
+    { id: "kugel",    name: "Kugel",    artikel: "die", farbe: "#ff9e2c" },
+    { id: "quader",   name: "Quader",   artikel: "der", farbe: "#28c08a" },
+    { id: "zylinder", name: "Zylinder", artikel: "der", farbe: "#9a7bd0" },
+    { id: "kegel",    name: "Kegel",    artikel: "der", farbe: "#d9453e" },
+    { id: "pyramide", name: "Pyramide", artikel: "die", farbe: "#f3c44a" }
+  ];
 
   // Geometrische Formen als "Symbole": Glyph fuers grosse Einblenden,
   // Name/Artikel fuer Sprachausgabe + Missionstext, Farbe fuers Spielfeld.
@@ -101,7 +119,11 @@
     rundenStartPunkte: 0,    // Punktestand beim Rundenbeginn (fuer die Bilanz)
     symbole: "mix",          // Einstellung: buchstaben | formen | mix
     schwierigkeit: "leicht", // Einstellung: leicht | mittel | schnell
-    spiegel: true,           // Spiegel-Minispiel zwischen den Kugeln?
+    zwischenspiele: true,    // Zwischenspiele zwischen den Kugeln?
+    // Rechenaufgabe-Einstellungen (Menue): Zahlenraum + aktive Operationen.
+    // Mal/Geteilt bleiben immer im kleinen Einmaleins (Faktoren 1..10).
+    rechnen: { zahlenraum: 20, plus: true, minus: true, mal: false, geteilt: false },
+    naechstesZwischen: "zeichnen", // wechselt: zeichnen <-> rechnen
     toene: true,
     sprache: true,
     mission: null,           // { elementIndex, symbol } oder null
@@ -123,7 +145,8 @@
     "einstellungen-zu", "einstellungen-fertig", "button-reset",
     "eltern-dialog", "eltern-frage", "eltern-antworten", "eltern-abbrechen",
     "popover", "konfetti", "spiegel-overlay", "spiegel-canvas",
-    "spiegel-titel", "spiegel-hinweis", "spiegel-skip"
+    "spiegel-titel", "spiegel-hinweis",
+    "rechen-overlay", "rechen-frage", "rechen-antworten", "rechen-hinweis"
   ].forEach(function (id) {
     el[id.replace(/-([a-z])/g, function (_, b) { return b.toUpperCase(); })] =
       document.getElementById(id);
@@ -174,7 +197,10 @@
     wandSegment(4, 445, PIVOT_L.x, PIVOT_L.y, 16),      // Einlauf links
     wandSegment(GASSE_X, 448, PIVOT_R.x, PIVOT_R.y, 16),// Einlauf rechts
     wandSegment(GASSE_X, 190, GASSE_X, 508, 8),         // Gassen-Trennwand
-    wandSegment(GASSE_X, 196, 338, 170, 8),             // Abweiser oben (lenkt zurueckfallende Kugeln ins Feld)
+    // Umlenk-Dach am Gassen-Ausgang: schiebt Kugeln nach LINKS ins Feld (die
+    // linke Seite liegt TIEFER, die Kugel rollt also von der Gasse WEG). So
+    // faellt eine zurueckkommende Kugel fast nie mehr in den Einlasskanal.
+    wandSegment(GASSE_X, 172, 300, 200, 9),
     wandSegment(348, 508, 398, 514, 14),                // Gassen-Boden (leicht schraeg -> Kugel rollt an die Wand)
     wandSegment(104, 530, 104, 600, 12),                // Abfluss-Kanal links
     wandSegment(296, 530, 296, 600, 12),                // Abfluss-Kanal rechts
@@ -193,14 +219,36 @@
     }
   })();
 
-  // --- Pilz-Bumper: drei Kreise im oberen Feld. "elemente" sammelt alles,
-  //     was ein Symbol traegt (Bumper + Tore) fuer Missionen & Rendering.
+  // --- Fang-Loch: sitzt oben in der Mitte. Die Bumper flankieren es, sodass
+  //     ein freier Schussweg nach oben in dieses Loch entsteht (wie beim
+  //     echten Flipper). Faellt die Kugel hinein, verschwindet sie fuer 2 s
+  //     und wird dann wieder ausgeworfen. Auf dem Loch dreht sich ein 3D-
+  //     Koerper, dessen Name beim Fangen vorgelesen wird (Lerneffekt).
+  var LOCH_R = 30;
+  var loch = {
+    x: 200, y: 150, r: LOCH_R,
+    aktuell: 0,          // Index in KOERPER_3D
+    drehung: 0,          // laeuft in jedem Frame weiter -> Koerper rotiert
+    gefangen: false,     // Kugel gerade eingefangen?
+    gefangenSeit: 0,
+    blitzZeit: 0
+  };
+  // Sensor-Kreis: die Kugel "faellt hinein" (kein Abprall), wir fangen sie
+  // in der Kollisionslogik selbst ab.
+  var lochBody = Bodies.circle(loch.x, loch.y, loch.r * 0.72, {
+    isStatic: true, isSensor: true, label: "loch"
+  });
+
+  // --- Pilz-Bumper: zwei grosse Kreise, die den Mittelweg zum Loch frei
+  //     lassen. "elemente" sammelt alles, was ein Symbol traegt (Bumper +
+  //     Tore) fuer Missionen & Rendering. Bumper sind bewusst groesser, damit
+  //     Buchstaben/Formen bequem auf dem Schild sitzen (nicht auf dem Rand).
   var elemente = [];         // { art, body, x, y, r/w, symbol, blitzZeit }
 
-  [{ x: 112, y: 208 }, { x: 288, y: 208 }, { x: 200, y: 306 }]
+  [{ x: 88, y: 256 }, { x: 312, y: 256 }]
     .forEach(function (p, i) {
-      var body = Bodies.circle(p.x, p.y, 27, { isStatic: true, label: "bumper-" + i });
-      elemente.push({ art: "bumper", body: body, x: p.x, y: p.y, r: 27, symbol: null, blitzZeit: 0 });
+      var body = Bodies.circle(p.x, p.y, 33, { isStatic: true, label: "bumper-" + i });
+      elemente.push({ art: "bumper", body: body, x: p.x, y: p.y, r: 33, symbol: null, blitzZeit: 0 });
     });
 
   // --- Tore: drei "Tuerchen" (abgerundete Kloetze) an Kuppel und Seiten.
@@ -208,14 +256,14 @@
   //     liegen bleiben kann, sondern immer herunterrollt.
   //     Die seitlichen Tore liegen BUENDIG an ihrer Wand (leicht ueberlappend):
   //     bleibt ein schmaler Spalt, kann sich die Kugel dort einklemmen.
-  [{ x: 200, y: 96, winkel: 0.08 },
-   { x: 44,  y: 330, winkel:  0.42 },
-   { x: 320, y: 330, winkel: -0.42 }]
+  [{ x: 200, y: 88, winkel: 0.08 },
+   { x: 44,  y: 336, winkel:  0.42 },
+   { x: 320, y: 336, winkel: -0.42 }]
     .forEach(function (p, i) {
-      var body = Bodies.rectangle(p.x, p.y, 58, 22, {
-        isStatic: true, angle: p.winkel, label: "tor-" + i, chamfer: { radius: 8 }
+      var body = Bodies.rectangle(p.x, p.y, 62, 30, {
+        isStatic: true, angle: p.winkel, label: "tor-" + i, chamfer: { radius: 10 }
       });
-      elemente.push({ art: "tor", body: body, x: p.x, y: p.y, w: 58, h: 22,
+      elemente.push({ art: "tor", body: body, x: p.x, y: p.y, w: 62, h: 30,
                       winkel: p.winkel, symbol: null, blitzZeit: 0 });
     });
 
@@ -278,7 +326,7 @@
   World.add(engine.world, waende
     .concat(elemente.map(function (e) { return e.body; }))
     .concat(slings.map(function (s) { return s.body; }))
-    .concat([flipperL.body, flipperR.body]));
+    .concat([lochBody, flipperL.body, flipperR.body]));
 
 
   /* 4. FLIPPER-STEUERUNG ---------------------------------------------------
@@ -352,6 +400,7 @@
       if (anderer.label.indexOf("bumper-") === 0) { aufBumper(anderer); }
       else if (anderer.label.indexOf("tor-") === 0) { aufTor(anderer); }
       else if (anderer.label.indexOf("sling-") === 0) { aufSling(anderer); }
+      else if (anderer.label === "loch") { aufLoch(); }
       else if (anderer.label.indexOf("flipper-") === 0) { kickeVonFlipper(anderer); }
     });
   });
@@ -425,6 +474,51 @@
     Body.setVelocity(kugel, { x: richtung * K().sling.x, y: K().sling.y });
     gibPunkte(PUNKTE_SLING);
     spielKlang("sling");
+  }
+
+  // --- Fang-Loch: Kugel verschwindet 2 Sekunden, dann Auswurf. Der gerade
+  //     rotierende 3D-Koerper wird vorgelesen (z. B. "Würfel!") und danach
+  //     kommt der naechste Koerper an die Reihe.
+  function aufLoch() {
+    if (loch.gefangen || !kugel) { return; }
+    loch.gefangen = true;
+    loch.gefangenSeit = performance.now();
+    loch.blitzZeit = performance.now();
+    World.remove(engine.world, kugel);
+    kugel = null;                            // andere Pruefungen ruhen solange
+
+    var k = KOERPER_3D[loch.aktuell];
+    gibPunkte(PUNKTE_LOCH);
+    spielKlang("tor");
+    spawnFunken(loch.x, loch.y, k.farbe);
+    zeigeKoerper3dName(k);                    // gross einblenden + vorlesen
+    window.setTimeout(freigabeLoch, 2000);
+  }
+
+  function freigabeLoch() {
+    loch.gefangen = false;
+    loch.aktuell = (loch.aktuell + 1) % KOERPER_3D.length;  // naechster Koerper
+    if (!state.laeuft) { return; }
+    // Neue Kugel direkt unter dem Loch auswerfen (sanft nach unten ins Feld)
+    kugel = Bodies.circle(loch.x, loch.y + loch.r + KUGEL_RADIUS + 2, KUGEL_RADIUS, {
+      label: "kugel", restitution: 0.45, friction: 0.002,
+      frictionAir: 0.006, density: 0.0022
+    });
+    World.add(engine.world, kugel);
+    kugelSpur = [];
+    Body.setVelocity(kugel, { x: (Math.random() - 0.5) * 3, y: 3.5 });
+    spielKlang("abschuss");
+  }
+
+  // 3D-Koerper-Namen gross einblenden (nutzt das Symbol-Blitz-Overlay)
+  function zeigeKoerper3dName(k) {
+    var blitz = el.symbolBlitz;
+    blitz.classList.remove("zeigt");
+    void blitz.offsetWidth;
+    blitz.textContent = k.name;
+    blitz.style.color = k.farbe;
+    blitz.classList.add("zeigt");
+    sprich(k.artikel + " " + k.name);
   }
 
   // Grosses Symbol in der Feldmitte aufblitzen lassen + vorsprechen
@@ -567,24 +661,57 @@
     el.buttonAbschuss.hidden = false;
     if (abschussHinweise < 2) {
       abschussHinweise++;
-      sprich("Drück den roten Knopf und schieß die Kugel ab!");
+      sprich("Halt den roten Knopf gedrückt – je länger, desto weiter fliegt die Kugel!");
     }
   }
 
+  // --- Variabler Abschuss (wie ein echter Plunger): den Knopf gedrueckt
+  //     HALTEN laedt die Kraft von schwach bis zum Maximum. Loslassen
+  //     schiesst mit der geladenen Kraft. Kurz getippt -> die Kugel kommt
+  //     kaum raus; lange gehalten -> voller Schuss.
+  var LADE_ZEIT = 900;                 // ms bis zur vollen Kraft
+  var ladung = { aktiv: false, start: 0, wert: 0 };
+
+  // 0..1: aktueller Ladestand (fuers Zeichnen der Kraftanzeige)
+  function ladeStand() {
+    if (ladung.aktiv) {
+      return Math.min(1, (performance.now() - ladung.start) / LADE_ZEIT);
+    }
+    return ladung.wert;
+  }
+
+  function starteLaden(e) {
+    if (e) {
+      e.preventDefault();
+      // Zeiger festhalten: so kommt das "Loslassen" sicher an und ein
+      // versehentliches Abrutschen loest nicht zu frueh aus.
+      try { el.buttonAbschuss.setPointerCapture(e.pointerId); } catch (f) {}
+    }
+    if (!kugel || !state.wartetAufAbschuss || ladung.aktiv) { return; }
+    weckeAudio();
+    ladung.aktiv = true;
+    ladung.start = performance.now();
+    ladung.wert = 0;
+    spielKlang("laden");
+  }
+
   function schiesseKugelAb() {
-    if (!kugel || !state.wartetAufAbschuss) { return; }
+    if (!kugel || !state.wartetAufAbschuss || !ladung.aktiv) { return; }
+    var t = Math.min(1, (performance.now() - ladung.start) / LADE_ZEIT);
+    ladung.aktiv = false;
+    ladung.wert = 0;
     state.wartetAufAbschuss = false;
     el.buttonAbschuss.hidden = true;
-    weckeAudio();
     // Der Tempodeckel pausiert kurz, damit der Abschuss volle Kraft hat
     klammerPauseBis = performance.now() + 900;
-    Body.setVelocity(kugel, { x: -0.4, y: -(K().abschuss + Math.random()) });
+    var kraft = K().abschussMin + t * (K().abschussMax - K().abschussMin);
+    Body.setVelocity(kugel, { x: -0.4, y: -kraft });
     spielKlang("abschuss");
   }
-  el.buttonAbschuss.addEventListener("pointerdown", function (e) {
-    e.preventDefault();
-    schiesseKugelAb();
-  });
+  el.buttonAbschuss.addEventListener("pointerdown", starteLaden);
+  el.buttonAbschuss.addEventListener("pointerup", schiesseKugelAb);
+  el.buttonAbschuss.addEventListener("pointercancel", schiesseKugelAb);
+  el.buttonAbschuss.addEventListener("pointerleave", schiesseKugelAb);
 
   // Liegt die Kugel (wieder) ruhig in der Gasse? -> Abschuss-Knopf zeigen
   function pruefeGasse() {
@@ -630,8 +757,8 @@
       el.anzeigeBaelle.textContent = state.baelle;
       if (state.baelle === 0) {
         zeigeRundenEnde();                   // Runde vorbei -> Feier + Bilanz
-      } else if (state.spiegel) {
-        oeffneSpiegelSpiel();                // Minispiel -> danach neue Kugel
+      } else if (state.zwischenspiele) {
+        oeffneZwischenspiel();               // Zeichnen ODER Rechnen -> neue Kugel
       } else {
         window.setTimeout(neueKugel, 900);
       }
@@ -720,6 +847,7 @@
     zeichneHintergrund();
     zeichneGasse();
     slings.forEach(zeichneSling);
+    zeichneLoch();
     elemente.forEach(function (e) {
       if (e.art === "bumper") { zeichneBumper(e); } else { zeichneTor(e); }
     });
@@ -815,15 +943,15 @@
     ctx.fill();
   }
 
-  // --- Abschuss-Gasse rechts: Trennwand, Pfeile und (beim Warten) die Feder
+  // --- Abschuss-Gasse rechts: Trennwand, Umlenk-Dach, Kraftanzeige, Feder
   function zeichneGasse() {
-    // Trennwand mit runder Kappe + Abweiser
+    // Trennwand mit runder Kappe + Umlenk-Dach (nach links ins Feld)
     ctx.lineCap = "round";
     ctx.strokeStyle = "#26375f";
     ctx.lineWidth = 8;
     ctx.beginPath();
     ctx.moveTo(GASSE_X, 508); ctx.lineTo(GASSE_X, 190);
-    ctx.lineTo(338, 170);
+    ctx.lineTo(GASSE_X, 172); ctx.lineTo(300, 200);
     ctx.stroke();
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#f3c44a";
@@ -831,26 +959,40 @@
     ctx.moveTo(GASSE_X - 4, 505); ctx.lineTo(GASSE_X - 4, 192);
     ctx.stroke();
 
+    // Kraftanzeige (Plunger): fuellt sich, solange der Knopf gehalten wird
+    var stand = ladeStand();
+    if (state.wartetAufAbschuss) {
+      var bx = 366, by = 300, bh = 150, bw = 12;   // Balken in der Gasse
+      ctx.fillStyle = "rgba(30, 44, 82, 0.16)";
+      ctx.beginPath();
+      abgerundetesRechteck(bx, by, bw, bh, 6); ctx.fill();
+      var fh = bh * stand;
+      var farbe = stand > 0.75 ? "#d9453e" : (stand > 0.4 ? "#ff9e2c" : "#28c08a");
+      ctx.fillStyle = farbe;
+      ctx.beginPath();
+      abgerundetesRechteck(bx, by + (bh - fh), bw, fh, 6); ctx.fill();
+    }
+
     // Pfeile in der Gasse (leuchten, wenn die Kugel wartet)
     var puls = state.wartetAufAbschuss
       ? 0.45 + 0.4 * Math.sin(performance.now() / 200) : 0.18;
     ctx.fillStyle = "rgba(243, 196, 74, " + puls + ")";
-    [340, 280, 220].forEach(function (y) {
+    [250, 200].forEach(function (y) {
       ctx.beginPath();
-      ctx.moveTo(370, y - 12);
-      ctx.lineTo(380, y + 4);
-      ctx.lineTo(360, y + 4);
+      ctx.moveTo(373, y - 12);
+      ctx.lineTo(383, y + 4);
+      ctx.lineTo(363, y + 4);
       ctx.closePath();
       ctx.fill();
     });
 
-    // Feder unter der wartenden Kugel (kleine Zickzack-Spirale)
+    // Feder unter der wartenden Kugel (staucht sich mit dem Ladestand)
     if (state.wartetAufAbschuss && kugel) {
       var oben = kugel.position.y + KUGEL_RADIUS + 2;
+      var y0 = 505 - stand * 8;                 // laedt -> Feder staucht leicht
       ctx.strokeStyle = "#d9453e";
       ctx.lineWidth = 3.5;
       ctx.beginPath();
-      var y0 = 505;
       var stufen = 5, hoehe = (y0 - oben) / stufen;
       ctx.moveTo(373, y0);
       for (var i = 0; i < stufen; i++) {
@@ -884,6 +1026,174 @@
     ctx.lineWidth = 5;
     ctx.strokeStyle = "rgba(255, 158, 44, " + (0.55 + puls * 0.45) + ")";
     ctx.stroke();
+  }
+
+  // --- Fang-Loch mit rotierendem 3D-Koerper ---------------------------------
+  //     Farben mischen (fuer Licht/Schatten der Koerper)
+  function hexRgb(hex) {
+    var n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function mischeFarbe(hex, mit, anteil) {
+    var a = hexRgb(hex), b = hexRgb(mit);
+    return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * anteil) + "," +
+                    Math.round(a[1] + (b[1] - a[1]) * anteil) + "," +
+                    Math.round(a[2] + (b[2] - a[2]) * anteil) + ")";
+  }
+
+  function zeichneLoch() {
+    loch.drehung += 0.03;
+    var x = loch.x, y = loch.y, r = loch.r;
+
+    // Schatten + dunkle Oeffnung (Tiefe per Radialverlauf)
+    ctx.beginPath();
+    ctx.ellipse(x, y + 4, r * 1.04, r * 0.9, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(30, 44, 82, 0.22)";
+    ctx.fill();
+    var g = ctx.createRadialGradient(x, y - 3, r * 0.2, x, y, r);
+    g.addColorStop(0, "#0d1730");
+    g.addColorStop(1, "#26375f");
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = "#f3c44a"; ctx.stroke();
+
+    // Timer-Ring, solange eine Kugel gefangen ist (leert sich in 2 s)
+    if (loch.gefangen) {
+      var t = Math.min(1, (performance.now() - loch.gefangenSeit) / 2000);
+      ctx.beginPath();
+      ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + (1 - t) * Math.PI * 2);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(255, 158, 44, 0.9)";
+      ctx.stroke();
+    }
+
+    // Der rotierende Koerper darauf
+    zeichneKoerper3D(KOERPER_3D[loch.aktuell], x, y, r * 0.62, loch.drehung);
+  }
+
+  // Rotierender 3D-Koerper (Platzhalter-Vektorgrafik mit Dreh-Illusion)
+  function zeichneKoerper3D(k, cx, cy, s, dreh) {
+    if (k.id === "wuerfel")      { zeichneKasten(cx, cy, s * 0.82, s * 0.82, s * 1.5, dreh, k.farbe); }
+    else if (k.id === "quader")  { zeichneKasten(cx, cy, s * 0.95, s * 0.5, s * 1.85, dreh, k.farbe); }
+    else if (k.id === "pyramide"){ zeichnePyramide(cx, cy, s * 0.95, s * 1.7, dreh, k.farbe); }
+    else if (k.id === "kugel")   { zeichne3dKugel(cx, cy, s, dreh, k.farbe); }
+    else if (k.id === "zylinder"){ zeichneZylinder(cx, cy, s * 0.72, s * 1.7, dreh, k.farbe); }
+    else if (k.id === "kegel")   { zeichneKegel(cx, cy, s * 0.85, s * 1.7, dreh, k.farbe); }
+  }
+
+  // Drehbarer Quader (leichte Aufsicht): 4 Seiten nach Tiefe sortiert + Deckel
+  function zeichneKasten(cx, cy, a, b, h, dreh, farbe) {
+    var tilt = 0.42;
+    var hell = mischeFarbe(farbe, "#ffffff", 0.42);
+    var dunkel = mischeFarbe(farbe, "#000000", 0.32);
+    var ecken = [[-a, -b], [a, -b], [a, b], [-a, b]];
+    var top = [], bot = [];
+    for (var i = 0; i < 4; i++) {
+      var ex = ecken[i][0], ez = ecken[i][1];
+      var rx = ex * Math.cos(dreh) - ez * Math.sin(dreh);
+      var rz = ex * Math.sin(dreh) + ez * Math.cos(dreh);
+      top.push({ x: cx + rx, y: cy - h / 2 + rz * tilt, z: rz });
+      bot.push({ x: cx + rx, y: cy + h / 2 + rz * tilt, z: rz });
+    }
+    var seiten = [];
+    for (var j = 0; j < 4; j++) {
+      var n = (j + 1) % 4;
+      seiten.push({ pts: [top[j], top[n], bot[n], bot[j]], z: (top[j].z + top[n].z) / 2 });
+    }
+    seiten.sort(function (p, q) { return p.z - q.z; });
+    seiten.forEach(function (fl) {
+      ctx.beginPath();
+      fl.pts.forEach(function (p, kk) { ctx[kk === 0 ? "moveTo" : "lineTo"](p.x, p.y); });
+      ctx.closePath();
+      ctx.fillStyle = fl.z >= 0 ? farbe : dunkel;
+      ctx.fill();
+      ctx.lineWidth = 1.4; ctx.strokeStyle = dunkel; ctx.stroke();
+    });
+    ctx.beginPath();
+    top.forEach(function (p, kk) { ctx[kk === 0 ? "moveTo" : "lineTo"](p.x, p.y); });
+    ctx.closePath();
+    ctx.fillStyle = hell; ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = dunkel; ctx.stroke();
+  }
+
+  function zeichnePyramide(cx, cy, a, h, dreh, farbe) {
+    var tilt = 0.42;
+    var apex = { x: cx, y: cy - h / 2 };
+    var ecken = [[-a, -a], [a, -a], [a, a], [-a, a]];
+    var base = [];
+    for (var i = 0; i < 4; i++) {
+      var ex = ecken[i][0], ez = ecken[i][1];
+      var rx = ex * Math.cos(dreh) - ez * Math.sin(dreh);
+      var rz = ex * Math.sin(dreh) + ez * Math.cos(dreh);
+      base.push({ x: cx + rx, y: cy + h / 2 + rz * tilt, z: rz });
+    }
+    var faces = [];
+    for (var j = 0; j < 4; j++) {
+      var n = (j + 1) % 4;
+      faces.push({ pts: [apex, base[j], base[n]], z: (base[j].z + base[n].z) / 2 });
+    }
+    faces.sort(function (p, q) { return p.z - q.z; });
+    faces.forEach(function (f) {
+      ctx.beginPath();
+      f.pts.forEach(function (p, kk) { ctx[kk === 0 ? "moveTo" : "lineTo"](p.x, p.y); });
+      ctx.closePath();
+      ctx.fillStyle = f.z >= 0 ? mischeFarbe(farbe, "#ffffff", 0.28)
+                               : mischeFarbe(farbe, "#000000", 0.30);
+      ctx.fill();
+      ctx.lineWidth = 1.4; ctx.strokeStyle = mischeFarbe(farbe, "#000000", 0.32); ctx.stroke();
+    });
+  }
+
+  function zeichne3dKugel(cx, cy, r, dreh, farbe) {
+    var g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.15, cx, cy, r);
+    g.addColorStop(0, mischeFarbe(farbe, "#ffffff", 0.7));
+    g.addColorStop(0.5, farbe);
+    g.addColorStop(1, mischeFarbe(farbe, "#000000", 0.34));
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = mischeFarbe(farbe, "#000000", 0.3); ctx.stroke();
+    // rotierender Meridian -> Dreh-Illusion
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, Math.abs(Math.cos(dreh)) * r * 0.88, r * 0.9, 0, 0, Math.PI * 2);
+    ctx.lineWidth = 1.4; ctx.strokeStyle = "rgba(255,255,255,0.32)"; ctx.stroke();
+  }
+
+  function zeichneZylinder(cx, cy, r, h, dreh, farbe) {
+    var oben = cy - h / 2, unten = cy + h / 2, ry = r * 0.34;
+    var koerper = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+    koerper.addColorStop(0, mischeFarbe(farbe, "#000000", 0.30));
+    koerper.addColorStop(0.5, mischeFarbe(farbe, "#ffffff", 0.36));
+    koerper.addColorStop(1, mischeFarbe(farbe, "#000000", 0.30));
+    ctx.beginPath();
+    ctx.moveTo(cx - r, oben);
+    ctx.lineTo(cx - r, unten);
+    ctx.ellipse(cx, unten, r, ry, 0, Math.PI, 0, true);
+    ctx.lineTo(cx + r, oben);
+    ctx.closePath();
+    ctx.fillStyle = koerper; ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = mischeFarbe(farbe, "#000000", 0.3); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx, oben, r, ry, 0, 0, Math.PI * 2);
+    ctx.fillStyle = mischeFarbe(farbe, "#ffffff", 0.42); ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = mischeFarbe(farbe, "#000000", 0.3); ctx.stroke();
+    var nx = cx + Math.sin(dreh) * r * 0.92;
+    ctx.beginPath(); ctx.moveTo(nx, oben + ry * (Math.cos(dreh) < 0 ? -0.2 : 0.2));
+    ctx.lineTo(nx, unten); ctx.lineWidth = 1.4;
+    ctx.strokeStyle = "rgba(255,255,255,0.28)"; ctx.stroke();
+  }
+
+  function zeichneKegel(cx, cy, r, h, dreh, farbe) {
+    var oben = cy - h / 2, unten = cy + h / 2, ry = r * 0.34;
+    var g = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+    g.addColorStop(0, mischeFarbe(farbe, "#000000", 0.30));
+    g.addColorStop(0.45, mischeFarbe(farbe, "#ffffff", 0.36));
+    g.addColorStop(1, mischeFarbe(farbe, "#000000", 0.30));
+    ctx.beginPath();
+    ctx.moveTo(cx, oben);
+    ctx.lineTo(cx + r, unten);
+    ctx.ellipse(cx, unten, r, ry, 0, 0, Math.PI, false);
+    ctx.closePath();
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = mischeFarbe(farbe, "#000000", 0.3); ctx.stroke();
   }
 
   // --- Pilz-Bumper: schattierter roter Hut mit Glanzlicht und Tupfen,
@@ -946,13 +1256,13 @@
 
     // weisses Schild in der Mitte mit Goldrand + Symbol
     ctx.beginPath();
-    ctx.arc(e.x, e.y, r * 0.62, 0, Math.PI * 2);
+    ctx.arc(e.x, e.y, r * 0.66, 0, Math.PI * 2);
     ctx.fillStyle = "#ffffff";
     ctx.fill();
     ctx.lineWidth = 2.5;
     ctx.strokeStyle = "#f3c44a";
     ctx.stroke();
-    zeichneSymbol(e.symbol, e.x, e.y, r * 0.8);
+    zeichneSymbol(e.symbol, e.x, e.y, r * 0.74);
   }
 
   // --- Tor: goldgerahmtes Tuerchen mit sanftem Verlauf und Symbol
@@ -1170,16 +1480,28 @@
   window.requestAnimationFrame(function (zeit) { letzteZeit = zeit; schleife(zeit); });
 
 
-  /* 9. SPIEGEL-MINISPIEL -------------------------------------------------------
-     Zwischen zwei Kugeln: links steht eine halbe Strichzeichnung, in der
-     Mitte die Spiegelachse. Das Kind faehrt rechts mit dem Finger ueber die
-     Punktreihe und "zaubert" so das Spiegelbild. Alle Punkte getroffen ->
-     Konfetti und die naechste Kugel. Ein dezenter "Weiter"-Knopf erscheint
-     nach einer Weile (kein Frust, keine Strafe). */
+  /* 9. ZWISCHENSPIELE ----------------------------------------------------------
+     Zwischen zwei Kugeln kommt IMMER eine kleine Aufgabe – abwechselnd:
+       a) "Zeichne die andere Hälfte": links steht eine halbe Zeichnung, das
+          Kind zeichnet rechts auf weisser Flaeche die gespiegelte Haelfte
+          nach. Die Kontrollpunkte sind UNSICHTBAR (im Hintergrund) und
+          grosszuegig, es muss in EINEM Zug (max. 2 Ansaetze) gezeichnet
+          werden – wildes Kritzeln startet den Versuch neu.
+       b) Eine Rechenaufgabe (Zahlenraum + Operationen im Menue einstellbar).
+     Es gibt bewusst KEINEN Ueberspringen-Knopf: die Aufgabe ist unausweichlich. */
+
+  // Abwechselnd Zeichnen / Rechnen aufrufen
+  function oeffneZwischenspiel() {
+    var typ = state.naechstesZwischen;
+    state.naechstesZwischen = (typ === "zeichnen") ? "rechnen" : "zeichnen";
+    if (typ === "rechnen") { oeffneRechnen(); } else { oeffneZeichnen(); }
+  }
+
+  /* --- 9a) ZEICHNE DIE ANDERE HAELFTE ------------------------------------- */
 
   // Halbe Zeichnungen als Linienzuege in Einheitskoordinaten (0..1),
   // Spiegelachse bei x = 0.5. >>> Eigene Motive: einfach Punkte ergaenzen. <<<
-  var SPIEGEL_MOTIVE = [
+  var ZEICHEN_MOTIVE = [
     { name: "Herz", farbe: "#d9453e", punkte: [
       [0.50, 0.30], [0.44, 0.22], [0.35, 0.18], [0.27, 0.20], [0.21, 0.27],
       [0.20, 0.36], [0.24, 0.45], [0.32, 0.54], [0.41, 0.63], [0.50, 0.72]] },
@@ -1190,60 +1512,71 @@
       [0.312, 0.779], [0.50, 0.65]] },
     { name: "Tannenbaum", farbe: "#149e72", punkte: [
       [0.50, 0.16], [0.34, 0.38], [0.42, 0.38], [0.28, 0.60],
-      [0.38, 0.60], [0.24, 0.80], [0.50, 0.80]] }
+      [0.38, 0.60], [0.24, 0.80], [0.50, 0.80]] },
+    { name: "Kreis", farbe: "#2f6fd6", punkte: [
+      [0.50, 0.18], [0.34, 0.22], [0.23, 0.34], [0.19, 0.50],
+      [0.23, 0.66], [0.34, 0.78], [0.50, 0.82]] },
+    { name: "Dreieck", farbe: "#28c08a", punkte: [
+      [0.50, 0.18], [0.36, 0.50], [0.22, 0.82], [0.50, 0.82]] },
+    { name: "Raute", farbe: "#9a7bd0", punkte: [
+      [0.50, 0.16], [0.36, 0.33], [0.24, 0.50], [0.36, 0.67], [0.50, 0.84]] }
   ];
 
-  var spiegel = {
-    offen: false, motiv: null, ziele: [],    // ziele: {x,y,getroffen}
-    strich: [],                              // gemalte Fingerpunkte
-    malt: false, skipTimer: null
+  var zeichnen = {
+    offen: false, motiv: null, ziele: [],    // ziele: {x,y,getroffen} (unsichtbar!)
+    striche: [], aktuell: null, malt: false,  // striche: Liste von Punkt-Listen
+    wegLaenge: 0, budget: 0, fertig: false
   };
-  var spiegelCtx = el.spiegelCanvas.getContext("2d");
+  var zeichenCtx = el.spiegelCanvas.getContext("2d");
 
-  function oeffneSpiegelSpiel() {
-    spiegel.offen = true;
-    spiegel.motiv = zufallAus(SPIEGEL_MOTIVE);
-    spiegel.strich = [];
+  function oeffneZeichnen() {
+    zeichnen.offen = true;
+    zeichnen.fertig = false;
+    zeichnen.motiv = zufallAus(ZEICHEN_MOTIVE);
+    zeichnen.striche = [];
+    zeichnen.aktuell = null;
+    zeichnen.wegLaenge = 0;
+
+    el.spiegelTitel.textContent = "✏️ Zeichne die andere Hälfte!";
     el.spiegelOverlay.classList.add("offen");
     el.spiegelOverlay.setAttribute("aria-hidden", "false");
-    el.spiegelHinweis.textContent = "Fahre rechts mit dem Finger über die Punkte.";
+    el.spiegelHinweis.textContent = "Zeichne rechts die andere Hälfte – in einem Zug.";
     el.spiegelHinweis.classList.remove("erfolg");
-    el.spiegelSkip.classList.remove("sichtbar");
-    window.clearTimeout(spiegel.skipTimer);
-    spiegel.skipTimer = window.setTimeout(function () {
-      el.spiegelSkip.classList.add("sichtbar");
-    }, 18000);
 
-    // Canvas-Aufloesung setzen und Zielpunkte aus dem gespiegelten
-    // Linienzug abtasten (alle ~7% der Kantenlaenge ein Punkt).
+    // Canvas-Aufloesung + unsichtbare Kontrollpunkte aus dem gespiegelten
+    // Linienzug abtasten. Grober Abstand + grosser Radius = grosse Toleranz.
     var dpr = window.devicePixelRatio || 1;
     var box = el.spiegelCanvas.getBoundingClientRect();
     el.spiegelCanvas.width = Math.round(box.width * dpr);
     el.spiegelCanvas.height = Math.round(box.height * dpr);
 
     var K = el.spiegelCanvas.width;          // quadratisch (CSS aspect-ratio)
-    spiegel.ziele = [];
-    var abstand = K * 0.07;
-    var pts = spiegel.motiv.punkte.map(function (p) {
-      return { x: (1 - p[0]) * K, y: p[1] * K };   // x spiegeln: rechts
+    zeichnen.ziele = [];
+    var abstand = K * 0.085;
+    var pts = zeichnen.motiv.punkte.map(function (p) {
+      return { x: (1 - p[0]) * K, y: p[1] * K };   // x spiegeln: rechte Haelfte
     });
+    var motivLaenge = 0;
     for (var i = 0; i < pts.length - 1; i++) {
       var a = pts[i], b = pts[i + 1];
       var laenge = Math.hypot(b.x - a.x, b.y - a.y);
+      motivLaenge += laenge;
       var n = Math.max(1, Math.round(laenge / abstand));
       for (var j = 0; j < n; j++) {
-        spiegel.ziele.push({ x: a.x + (b.x - a.x) * j / n,
-                             y: a.y + (b.y - a.y) * j / n, getroffen: false });
+        zeichnen.ziele.push({ x: a.x + (b.x - a.x) * j / n,
+                              y: a.y + (b.y - a.y) * j / n, getroffen: false });
       }
     }
-    spiegel.ziele.push({ x: pts[pts.length - 1].x, y: pts[pts.length - 1].y, getroffen: false });
+    zeichnen.ziele.push({ x: pts[pts.length - 1].x, y: pts[pts.length - 1].y, getroffen: false });
+    // Weg-Budget gegen wildes Kritzeln (2 Zuege duerfen etwas laenger sein)
+    zeichnen.budget = motivLaenge * 2.6;
 
-    sprich("Zaubere die andere Hälfte! Fahre mit dem Finger über die Punkte.");
-    zeichneSpiegel();
+    sprich("Zeichne die andere Hälfte! Zeichne sie in einem Zug nach.");
+    zeichneZeichnung();
   }
 
-  function zeichneSpiegel() {
-    var K = el.spiegelCanvas.width, ctx2 = spiegelCtx;
+  function zeichneZeichnung() {
+    var K = el.spiegelCanvas.width, ctx2 = zeichenCtx;
     ctx2.setTransform(1, 0, 0, 1, 0, 0);
     ctx2.clearRect(0, 0, K, el.spiegelCanvas.height);
     var dick = Math.max(4, K * 0.016);
@@ -1258,79 +1591,103 @@
     ctx2.stroke();
     ctx2.setLineDash([]);
 
-    // Linke Haelfte: das fertige halbe Motiv
-    ctx2.strokeStyle = spiegel.motiv.farbe;
+    // Linke Haelfte: die fertige Vorlage
+    ctx2.strokeStyle = zeichnen.motiv.farbe;
     ctx2.lineWidth = dick;
     ctx2.lineCap = "round";
     ctx2.lineJoin = "round";
     ctx2.beginPath();
-    spiegel.motiv.punkte.forEach(function (p, i) {
+    zeichnen.motiv.punkte.forEach(function (p, i) {
       ctx2[i === 0 ? "moveTo" : "lineTo"](p[0] * K, p[1] * K);
     });
     ctx2.stroke();
 
-    // Rechte Haelfte: Zielpunkte (offen = hell, getroffen = bunt)
-    spiegel.ziele.forEach(function (z) {
+    // Rechte Haelfte: KEINE sichtbaren Punkte – nur weisse Flaeche.
+    // Nach dem Erfolg wird das gespiegelte Motiv als Loesung eingeblendet.
+    if (zeichnen.fertig) {
+      ctx2.strokeStyle = zeichnen.motiv.farbe;
+      ctx2.lineWidth = dick;
       ctx2.beginPath();
-      ctx2.arc(z.x, z.y, dick * 1.1, 0, Math.PI * 2);
-      ctx2.fillStyle = z.getroffen ? spiegel.motiv.farbe : "#d5deef";
-      ctx2.fill();
-    });
-
-    // Fingerspur des Kindes (weiche gruene Linie)
-    if (spiegel.strich.length > 1) {
-      ctx2.strokeStyle = "rgba(40, 192, 138, 0.55)";
-      ctx2.lineWidth = dick * 1.4;
-      ctx2.beginPath();
-      spiegel.strich.forEach(function (p, i) {
-        ctx2[i === 0 ? "moveTo" : "lineTo"](p.x, p.y);
+      zeichnen.motiv.punkte.forEach(function (p, i) {
+        ctx2[i === 0 ? "moveTo" : "lineTo"]((1 - p[0]) * K, p[1] * K);
       });
       ctx2.stroke();
     }
+
+    // Kinder-Zeichnung (alle Striche, bleiben stehen)
+    ctx2.strokeStyle = "rgba(40, 160, 120, 0.85)";
+    ctx2.lineWidth = dick * 1.25;
+    zeichnen.striche.forEach(function (strich) {
+      if (strich.length < 2) { return; }
+      ctx2.beginPath();
+      strich.forEach(function (p, i) { ctx2[i === 0 ? "moveTo" : "lineTo"](p.x, p.y); });
+      ctx2.stroke();
+    });
   }
 
-  // Finger-Eingabe: nur die rechte Haelfte zaehlt (links ist die Vorlage)
-  function spiegelPunktVonEvent(ereignis) {
+  function zeichenPunktVonEvent(ereignis) {
     var box = el.spiegelCanvas.getBoundingClientRect();
     var dpr = el.spiegelCanvas.width / box.width;
     return { x: (ereignis.clientX - box.left) * dpr,
              y: (ereignis.clientY - box.top) * dpr };
   }
 
-  function spiegelMale(ereignis) {
-    if (!spiegel.offen || !spiegel.malt) { return; }
+  // Versuch neu starten (zu viele Ansaetze oder Gekritzel)
+  function neuerZeichenVersuch(hinweis) {
+    zeichnen.striche = [];
+    zeichnen.aktuell = null;
+    zeichnen.wegLaenge = 0;
+    zeichnen.ziele.forEach(function (z) { z.getroffen = false; });
+    el.spiegelHinweis.textContent = hinweis;
+    sprich(hinweis);
+    zeichneZeichnung();
+  }
+
+  function zeichenMale(ereignis) {
+    if (!zeichnen.offen || !zeichnen.malt || zeichnen.fertig) { return; }
     ereignis.preventDefault();
-    var p = spiegelPunktVonEvent(ereignis);
+    var p = zeichenPunktVonEvent(ereignis);
     var K = el.spiegelCanvas.width;
-    if (p.x < K / 2) { return; }             // linke Haelfte ist tabu
-    spiegel.strich.push(p);
-    var radius = K * 0.055, neue = 0;        // grosszuegige Toleranz
-    spiegel.ziele.forEach(function (z) {
+    if (p.x < K / 2) { return; }              // linke Haelfte ist tabu (Vorlage)
+    var strich = zeichnen.aktuell;
+    if (strich && strich.length) {
+      var vor = strich[strich.length - 1];
+      zeichnen.wegLaenge += Math.hypot(p.x - vor.x, p.y - vor.y);
+    }
+    strich.push(p);
+    // Anti-Kritzel: zu langer Weg -> Versuch neu
+    if (zeichnen.wegLaenge > zeichnen.budget) {
+      zeichnen.malt = false;
+      neuerZeichenVersuch("Nicht kritzeln – zeichne die Linie in einem Zug nach!");
+      return;
+    }
+    var radius = K * 0.075, neue = 0;         // grosse, unsichtbare Toleranz
+    zeichnen.ziele.forEach(function (z) {
       if (!z.getroffen && Math.hypot(z.x - p.x, z.y - p.y) < radius) {
-        z.getroffen = true;
-        neue++;
+        z.getroffen = true; neue++;
       }
     });
     if (neue > 0) { spielKlang("spiegelpunkt"); }
-    zeichneSpiegel();
-    pruefeSpiegelFertig();
+    zeichneZeichnung();
+    pruefeZeichenFertig();
   }
 
-  function pruefeSpiegelFertig() {
-    var offenZaehler = spiegel.ziele.filter(function (z) { return !z.getroffen; }).length;
-    if (offenZaehler > 0) { return; }
-    spiegel.offen = false;                   // fertig - Eingabe stoppen
-    el.spiegelHinweis.textContent = "✨ Wunderbar gespiegelt!";
+  function pruefeZeichenFertig() {
+    var offen = zeichnen.ziele.filter(function (z) { return !z.getroffen; }).length;
+    if (offen > 0) { return; }
+    zeichnen.fertig = true;
+    zeichnen.malt = false;
+    el.spiegelHinweis.textContent = "✨ Wunderbar nachgezeichnet!";
     el.spiegelHinweis.classList.add("erfolg");
+    zeichneZeichnung();
     werfeKonfetti();
     spielKlang("erfolg");
-    sprich("Wunderbar gespiegelt! Hier kommt die nächste Kugel!");
-    window.setTimeout(schliesseSpiegelSpiel, 1500);
+    sprich("Wunderbar gezeichnet! Hier kommt die nächste Kugel!");
+    window.setTimeout(schliesseZeichnen, 1600);
   }
 
-  function schliesseSpiegelSpiel() {
-    spiegel.offen = false;
-    window.clearTimeout(spiegel.skipTimer);
+  function schliesseZeichnen() {
+    zeichnen.offen = false;
     el.spiegelOverlay.classList.remove("offen");
     el.spiegelOverlay.setAttribute("aria-hidden", "true");
     neueKugel();
@@ -1338,18 +1695,115 @@
 
   el.spiegelCanvas.addEventListener("pointerdown", function (e) {
     e.preventDefault();
-    if (!spiegel.offen) { return; }
-    spiegel.malt = true;
+    if (!zeichnen.offen || zeichnen.fertig) { return; }
+    // Maximal ZWEI Ansaetze: der dritte startet den Versuch neu
+    if (zeichnen.striche.length >= 2) {
+      neuerZeichenVersuch("In einem Zug bitte – höchstens zweimal ansetzen!");
+    }
+    zeichnen.aktuell = [];
+    zeichnen.striche.push(zeichnen.aktuell);
+    zeichnen.malt = true;
     el.spiegelCanvas.setPointerCapture(e.pointerId);
-    spiegelMale(e);
+    zeichenMale(e);
   });
-  el.spiegelCanvas.addEventListener("pointermove", spiegelMale);
+  el.spiegelCanvas.addEventListener("pointermove", zeichenMale);
   el.spiegelCanvas.addEventListener("pointerup", function () {
-    spiegel.malt = false;
-    spiegel.strich = [];                     // Spur verblasst beim Absetzen
-    if (spiegel.offen) { zeichneSpiegel(); }
+    zeichnen.malt = false;
   });
-  el.spiegelSkip.addEventListener("click", schliesseSpiegelSpiel);
+  el.spiegelCanvas.addEventListener("pointercancel", function () {
+    zeichnen.malt = false;
+  });
+
+  /* --- 9b) RECHENAUFGABE -------------------------------------------------- */
+
+  function erzeugeAufgabe() {
+    var ops = [];
+    if (state.rechnen.plus)    { ops.push("plus"); }
+    if (state.rechnen.minus)   { ops.push("minus"); }
+    if (state.rechnen.mal)     { ops.push("mal"); }
+    if (state.rechnen.geteilt) { ops.push("geteilt"); }
+    if (!ops.length) { ops = ["plus"]; }
+    var op = zufallAus(ops);
+    var zr = state.rechnen.zahlenraum;
+    var a, b, erg, text, gesprochen;
+    if (op === "plus") {
+      a = zufallGanzzahl(0, zr); b = zufallGanzzahl(0, zr - a);
+      erg = a + b; text = a + " + " + b; gesprochen = a + " plus " + b;
+    } else if (op === "minus") {
+      a = zufallGanzzahl(0, zr); b = zufallGanzzahl(0, a);
+      erg = a - b; text = a + " − " + b; gesprochen = a + " minus " + b;
+    } else if (op === "mal") {
+      a = zufallGanzzahl(1, 10); b = zufallGanzzahl(1, 10);      // kleines Einmaleins
+      erg = a * b; text = a + " × " + b; gesprochen = a + " mal " + b;
+    } else {
+      b = zufallGanzzahl(2, 10); erg = zufallGanzzahl(1, 10); a = b * erg;
+      text = a + " ÷ " + b; gesprochen = a + " geteilt durch " + b;
+    }
+    return { text: text, erg: erg, gesprochen: gesprochen };
+  }
+
+  var rechenAufgabe = null;
+
+  function oeffneRechnen() {
+    rechenAufgabe = erzeugeAufgabe();
+    el.rechenFrage.textContent = rechenAufgabe.text + " = ?";
+    el.rechenHinweis.textContent = "Tippe die richtige Antwort!";
+    el.rechenHinweis.classList.remove("erfolg");
+
+    // Antwortmoeglichkeiten: richtige + zwei knappe Nachbarn
+    var antworten = [rechenAufgabe.erg], schutz = 0;
+    while (antworten.length < 3 && schutz < 60) {
+      var d = rechenAufgabe.erg + zufallGanzzahl(-3, 3);
+      if (d >= 0 && antworten.indexOf(d) < 0) { antworten.push(d); }
+      schutz++;
+    }
+    while (antworten.length < 3) { antworten.push(rechenAufgabe.erg + antworten.length); }
+    antworten.sort(function () { return Math.random() - 0.5; });
+
+    leere(el.rechenAntworten);
+    antworten.forEach(function (wert) {
+      var knopf = document.createElement("button");
+      knopf.type = "button";
+      knopf.className = "rechen-antwort";
+      knopf.textContent = wert;
+      knopf.addEventListener("click", function () { antworteRechnen(wert, knopf); });
+      el.rechenAntworten.appendChild(knopf);
+    });
+
+    el.rechenOverlay.classList.add("offen");
+    el.rechenOverlay.setAttribute("aria-hidden", "false");
+    sprich("Rechne: " + rechenAufgabe.gesprochen + "?");
+  }
+
+  function antworteRechnen(wert, knopf) {
+    if (!rechenAufgabe) { return; }
+    if (wert === rechenAufgabe.erg) {
+      var loesung = rechenAufgabe.erg;
+      rechenAufgabe = null;
+      knopf.classList.add("richtig");
+      el.rechenHinweis.textContent = "✨ Richtig!";
+      el.rechenHinweis.classList.add("erfolg");
+      werfeKonfetti();
+      spielKlang("richtig");
+      sprich(zufallAus(["Richtig!", "Super gerechnet!", "Genau!", "Klasse!"]) +
+             " Das ist " + loesung + ".");
+      window.setTimeout(schliesseRechnen, 1400);
+    } else {
+      knopf.classList.add("falsch");
+      el.rechenOverlay.querySelector(".rechen-karte").classList.add("wackelt");
+      window.setTimeout(function () {
+        el.rechenOverlay.querySelector(".rechen-karte").classList.remove("wackelt");
+      }, 550);
+      spielKlang("falsch");
+      sprich("Fast! Probier es noch einmal.");
+    }
+  }
+
+  function schliesseRechnen() {
+    el.rechenOverlay.classList.remove("offen");
+    el.rechenOverlay.setAttribute("aria-hidden", "true");
+    neueKugel();
+  }
 
 
   /* 10. SOUND + SPRACHAUSGABE ---------------------------------------------- */
@@ -1378,8 +1832,11 @@
       erfolg:       { toene: [523.25, 659.25, 783.99, 1046.5], art: "triangle", laut: 0.24, dauer: 0.2 },
       start:        { toene: [392, 523.25],         art: "sine",     laut: 0.16, dauer: 0.14 },
       abschuss:     { toene: [196, 392, 587.33],    art: "square",   laut: 0.14, dauer: 0.12 },
+      laden:        { toene: [160],                 art: "square",   laut: 0.06, dauer: 0.06 },
       verloren:     { toene: [330, 262],            art: "sine",     laut: 0.14, dauer: 0.22 },
-      spiegelpunkt: { toene: [740 + Math.random() * 160], art: "sine", laut: 0.1, dauer: 0.07 }
+      spiegelpunkt: { toene: [740 + Math.random() * 160], art: "sine", laut: 0.1, dauer: 0.07 },
+      richtig:      { toene: [523.25, 659.25, 880], art: "triangle", laut: 0.2,  dauer: 0.16 },
+      falsch:       { toene: [220, 175],            art: "sine",     laut: 0.12, dauer: 0.18 }
     };
     var r = rezepte[typ] || rezepte.bumper;
     r.toene.forEach(function (frequenz, i) {
@@ -1474,7 +1931,9 @@
       var aktiv =
         (s === "symbole" && state.symbole === w) ||
         (s === "schwierigkeit" && state.schwierigkeit === w) ||
-        (s === "spiegel" && state.spiegel === (w === "an")) ||
+        (s === "zwischen" && state.zwischenspiele === (w === "an")) ||
+        (s === "zahlenraum" && state.rechnen.zahlenraum === parseInt(w, 10)) ||
+        (s === "rechenop" && state.rechnen[w] === true) ||
         (s === "toene"   && state.toene   === (w === "an")) ||
         (s === "sprache" && state.sprache === (w === "an"));
       karte.classList.toggle("aktiv", aktiv);
@@ -1494,7 +1953,9 @@
         state.schwierigkeit = w;
         wendeSchwierigkeitAn();              // wirkt sofort auf die Kugel
       }
-      if (s === "spiegel") { state.spiegel = (w === "an"); }
+      if (s === "zwischen") { state.zwischenspiele = (w === "an"); }
+      if (s === "zahlenraum") { state.rechnen.zahlenraum = parseInt(w, 10); }
+      if (s === "rechenop") { state.rechnen[w] = !state.rechnen[w]; }  // Mehrfachauswahl
       if (s === "toene")   { state.toene   = (w === "an"); }
       if (s === "sprache") { state.sprache = (w === "an"); }
       markiereEinstellungen();
@@ -1551,8 +2012,8 @@
     try {
       window.localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify({
         punkte: state.punkte, sterne: state.sterne, symbole: state.symbole,
-        schwierigkeit: state.schwierigkeit, spiegel: state.spiegel,
-        toene: state.toene, sprache: state.sprache
+        schwierigkeit: state.schwierigkeit, zwischenspiele: state.zwischenspiele,
+        rechnen: state.rechnen, toene: state.toene, sprache: state.sprache
       }));
     } catch (fehler) { /* privater Modus o.ae. - dann eben ohne Speichern */ }
   }
@@ -1565,7 +2026,17 @@
       if (typeof d.sterne === "number") { state.sterne = d.sterne; }
       if (typeof d.symbole === "string") { state.symbole = d.symbole; }
       if (SCHWIERIGKEITEN[d.schwierigkeit]) { state.schwierigkeit = d.schwierigkeit; }
-      if (typeof d.spiegel === "boolean") { state.spiegel = d.spiegel; }
+      // Zwischenspiele (neuer Schluessel, aber alten "spiegel" noch respektieren)
+      if (typeof d.zwischenspiele === "boolean") { state.zwischenspiele = d.zwischenspiele; }
+      else if (typeof d.spiegel === "boolean") { state.zwischenspiele = d.spiegel; }
+      if (d.rechnen && typeof d.rechnen === "object") {
+        if ([10, 20, 100].indexOf(d.rechnen.zahlenraum) >= 0) {
+          state.rechnen.zahlenraum = d.rechnen.zahlenraum;
+        }
+        ["plus", "minus", "mal", "geteilt"].forEach(function (op) {
+          if (typeof d.rechnen[op] === "boolean") { state.rechnen[op] = d.rechnen[op]; }
+        });
+      }
       if (typeof d.toene === "boolean") { state.toene = d.toene; }
       if (typeof d.sprache === "boolean") { state.sprache = d.sprache; }
     } catch (fehler) { /* kaputte Daten ignorieren */ }

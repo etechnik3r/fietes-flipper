@@ -48,7 +48,7 @@
   <!-- PWA: installierbar + offline (siehe manifest.webmanifest / sw.js).
        Schriften liegen lokal in fonts/ (kein CDN noetig). -->
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
 </head>
 
@@ -96,19 +96,18 @@
   </header>
 
 
-  <!-- 2) MISSIONS-SCHILD: edles dunkles Schild wie beim Uhrzeit-Uhu.
-       Zeigt die aktuelle Mission ("Triff das M!"); Antippen liest sie vor. -->
-  <button type="button" class="mission-schild" id="mission-schild" aria-label="Mission anhören">
-    <span class="mission-label">🎯 MISSION</span>
-    <span class="mission-text" id="mission-text">Los geht’s!</span>
-    <span class="mission-hoeren" aria-hidden="true">🔊</span>
-  </button>
-
-
-  <!-- 3) SPIELFELD: der Canvas fuellt den Platz zwischen Schild und
+  <!-- 3) SPIELFELD: der Canvas fuellt den Platz zwischen Top-Bar und
        Flipper-Zonen. Physik + Zeichnung uebernimmt game.js. -->
   <main class="spielfeld-bereich">
     <canvas id="spielfeld" class="spielfeld" aria-label="Flipper-Spielfeld"></canvas>
+
+    <!-- MISSIONS-SCHILD: dezent in der oberen linken Ecke, damit das
+         Spielfeld oben frei bleibt. Antippen liest die Mission vor. -->
+    <button type="button" class="mission-schild" id="mission-schild" aria-label="Mission anhören">
+      <span class="mission-label" aria-hidden="true">🎯</span>
+      <span class="mission-text" id="mission-text">Los geht’s!</span>
+      <span class="mission-hoeren" aria-hidden="true">🔊</span>
+    </button>
 
     <!-- Grosses Symbol-Blitzen: wird bei jedem Bumper-/Tor-Treffer kurz
          eingeblendet (Buchstabe oder Form, riesig in der Feldmitte). -->
@@ -141,18 +140,25 @@
   </footer>
 
 
-  <!-- 5) SPIEGEL-MINISPIEL: Vollbild-Overlay zwischen zwei Kugeln.
-       Links eine halbe Zeichnung, rechts spiegelt das Kind sie mit dem
-       Finger nach (Punkte "einsammeln"). Danach kommt die naechste Kugel. -->
+  <!-- 5) ZEICHEN-ZWISCHENSPIEL: Vollbild-Overlay zwischen zwei Kugeln.
+       Links eine halbe Zeichnung, rechts zeichnet das Kind auf weisser
+       Flaeche die andere Haelfte nach – in einem Zug, ohne Skip-Knopf. -->
   <div class="spiegel-overlay" id="spiegel-overlay" aria-hidden="true">
     <div class="spiegel-karte">
-      <h2 class="spiegel-titel" id="spiegel-titel">🪞 Zaubere die andere Hälfte!</h2>
-      <p class="spiegel-hinweis" id="spiegel-hinweis">Fahre rechts mit dem Finger über die Punkte.</p>
-      <canvas id="spiegel-canvas" class="spiegel-canvas" aria-label="Spiegelbild nachzeichnen"></canvas>
-      <div class="spiegel-fuss">
-        <!-- dezenter Ausweg, falls es mal nicht klappen will (keine Strafe) -->
-        <button type="button" class="spiegel-skip" id="spiegel-skip">Weiter ohne Zaubern →</button>
-      </div>
+      <h2 class="spiegel-titel" id="spiegel-titel">✏️ Zeichne die andere Hälfte!</h2>
+      <p class="spiegel-hinweis" id="spiegel-hinweis">Zeichne rechts die andere Hälfte – in einem Zug.</p>
+      <canvas id="spiegel-canvas" class="spiegel-canvas" aria-label="Die andere Hälfte nachzeichnen"></canvas>
+    </div>
+  </div>
+
+  <!-- 5b) RECHEN-ZWISCHENSPIEL: abwechselnd mit dem Zeichnen. Eine Aufgabe,
+       drei Antworten – kein Skip-Knopf, die Aufgabe muss gelöst werden. -->
+  <div class="rechen-overlay" id="rechen-overlay" aria-hidden="true">
+    <div class="rechen-karte">
+      <h2 class="rechen-titel">🧮 Rechne aus!</h2>
+      <p class="rechen-frage" id="rechen-frage">3 + 4 = ?</p>
+      <div class="rechen-antworten" id="rechen-antworten"></div>
+      <p class="rechen-hinweis" id="rechen-hinweis">Tippe die richtige Antwort!</p>
     </div>
   </div>
 
@@ -222,17 +228,61 @@
           </div>
         </section>
 
-        <!-- Spiegel-Minispiel an/aus (falls nur geflippert werden soll) -->
+        <!-- Zwischenspiele an/aus (Zeichnen + Rechnen abwechselnd) -->
         <section class="opt-gruppe">
-          <h3 class="opt-titel">🪞 Spiegel-Zauber</h3>
+          <h3 class="opt-titel">🎲 Zwischenspiele</h3>
           <div class="opt-reihe opt-reihe-zwei">
-            <button type="button" class="opt-karte" data-setting="spiegel" data-wert="an">
-              <span class="opt-icon">🪞</span><span class="opt-name">An</span>
-              <span class="opt-text">zwischen den Kugeln</span>
+            <button type="button" class="opt-karte" data-setting="zwischen" data-wert="an">
+              <span class="opt-icon">✏️</span><span class="opt-name">An</span>
+              <span class="opt-text">Zeichnen &amp; Rechnen</span>
             </button>
-            <button type="button" class="opt-karte" data-setting="spiegel" data-wert="aus">
+            <button type="button" class="opt-karte" data-setting="zwischen" data-wert="aus">
               <span class="opt-icon">⚡</span><span class="opt-name">Aus</span>
               <span class="opt-text">sofort weiterflippern</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Rechenaufgabe: Zahlenraum (nur einer) -->
+        <section class="opt-gruppe">
+          <h3 class="opt-titel">🔢 Zahlenraum</h3>
+          <div class="opt-reihe">
+            <button type="button" class="opt-karte" data-setting="zahlenraum" data-wert="10">
+              <span class="opt-icon">🔟</span><span class="opt-name">bis 10</span>
+              <span class="opt-text">für den Anfang</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="zahlenraum" data-wert="20">
+              <span class="opt-icon">2️⃣</span><span class="opt-name">bis 20</span>
+              <span class="opt-text">etwas größer</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="zahlenraum" data-wert="100">
+              <span class="opt-icon">💯</span><span class="opt-name">bis 100</span>
+              <span class="opt-text">für Profis</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Rechenaufgabe: Operationen (Mehrfachauswahl) -->
+        <section class="opt-gruppe">
+          <h3 class="opt-titel">➕ Rechenarten <span class="opt-untertitel">(mehrere möglich)</span></h3>
+          <div class="opt-reihe">
+            <button type="button" class="opt-karte" data-setting="rechenop" data-wert="plus">
+              <span class="opt-icon">➕</span><span class="opt-name">Plus</span>
+              <span class="opt-text">zusammenzählen</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="rechenop" data-wert="minus">
+              <span class="opt-icon">➖</span><span class="opt-name">Minus</span>
+              <span class="opt-text">abziehen</span>
+            </button>
+          </div>
+          <div class="opt-reihe" style="margin-top:10px;">
+            <button type="button" class="opt-karte" data-setting="rechenop" data-wert="mal">
+              <span class="opt-icon">✖️</span><span class="opt-name">Mal</span>
+              <span class="opt-text">kleines Einmaleins</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="rechenop" data-wert="geteilt">
+              <span class="opt-icon">➗</span><span class="opt-name">Geteilt</span>
+              <span class="opt-text">kleines Einmaleins</span>
             </button>
           </div>
         </section>
@@ -295,6 +345,6 @@
 
   <!-- Physik-Bibliothek (lokal, offline-faehig) + Spiellogik -->
   <script src="matter.min.js"></script>
-  <script src="game.js?v=2"></script>
+  <script src="game.js?v=3"></script>
 </body>
 </html>

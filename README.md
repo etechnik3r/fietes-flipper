@@ -16,9 +16,14 @@ wieder, und Punkte gehen nie verloren.
 ## 🕹️ So wird gespielt
 
 - Am Anfang erscheint ein Titelbild – **einmal tippen** startet das Spiel.
-- Jede Kugel wartet rechts in der **Abschuss-Gasse**. Ein Druck auf den
-  großen roten **🚀-Knopf** schießt sie ins Feld – wie der Abzug beim
-  echten Flipper.
+- Jede Kugel wartet rechts in der **Abschuss-Gasse**. Den großen roten
+  **🚀-Knopf gedrückt halten** lädt Kraft auf (die Anzeige in der Gasse
+  füllt sich) – **je länger, desto weiter** fliegt die Kugel. Kurz getippt
+  kommt sie kaum heraus: genau wie der Abzug beim echten Flipper.
+- Oben in der Mitte gibt es ein **Fang-Loch**. Fällt die Kugel hinein,
+  verschwindet sie kurz und kommt nach 2 Sekunden wieder heraus. Auf dem
+  Loch dreht sich ein **3D-Körper** (Würfel, Kugel, Quader, Zylinder,
+  Kegel, Pyramide) – beim Fangen wird sein Name **vorgelesen**.
 - Unten am Bildschirm liegen **zwei riesige Knöpfe**: der **blaue** links,
   der **rote** rechts. Gedrückt halten hebt den jeweiligen Flipper-Arm,
   loslassen lässt ihn zurückfallen – so hält man die Kugel im Spiel.
@@ -41,16 +46,24 @@ Beispiel *„Triff das M!“* oder *„Triff den Kreis!“*. Das passende Ziel
 Die Mission wartet geduldig – Fehlschüsse sind völlig egal. Antippen des
 Schilds liest die Mission noch einmal vor (praktisch für Nichtleser).
 
-## 🪞 Der Spiegel-Zauber
+## ✏️ Die Zwischenspiele
 
-Fällt die Kugel unten heraus, ist das keine Strafe, sondern ein
-**Zauber-Moment**: Links steht eine **halbe Zeichnung** (Herz, Haus, Stern
-oder Tannenbaum), in der Mitte die Spiegelachse. Mit dem Finger fährt das
-Kind rechts über die Punktreihe und **zaubert so das Spiegelbild** herbei.
-Ist das Bild komplett, gibt es Konfetti – und die nächste Kugel rollt an.
+Fällt die Kugel unten heraus, ist das keine Strafe, sondern eine kleine
+Lern-Aufgabe – **abwechselnd Zeichnen und Rechnen**. Einen Überspringen-
+Knopf gibt es bewusst **nicht**: die Aufgabe wird wirklich gelöst.
 
-Wer mag, schaltet den Spiegel-Zauber im Menü aus und flippert einfach
-sofort weiter.
+- **Zeichne die andere Hälfte:** Links steht eine **halbe Zeichnung** (Herz,
+  Haus, Stern, Tannenbaum, Kreis, Dreieck, Raute), in der Mitte die
+  Spiegelachse. Das Kind zeichnet rechts auf der **weißen Fläche** die andere
+  Hälfte nach – **in einem Zug** (höchstens zweimal absetzen; wildes Kritzeln
+  startet den Versuch neu). Die Kontrollpunkte sind bewusst unsichtbar und
+  großzügig.
+- **Rechenaufgabe:** Eine Aufgabe, drei Antworten. Im Menü einstellbar sind
+  der **Zahlenraum** (bis 10, 20 oder 100) und die **Rechenarten**
+  (Plus, Minus, Mal, Geteilt – **Mehrfachauswahl**). Mal und Geteilt bleiben
+  im **kleinen Einmaleins**.
+
+Wer mag, schaltet die Zwischenspiele im Menü aus und flippert sofort weiter.
 
 ## 🔘 Die Knöpfe im Überblick
 
@@ -58,8 +71,8 @@ sofort weiter.
 |---|---|
 | 🐸 (oben links) | Infos über das Spiel |
 | 🎱 / 🔵 / ⭐ | Übrige Kugeln, Punkte und Missions-Sterne – antippen erklärt sie |
-| ⚙️ | Menü: Buchstaben/Formen/Mix, Schwierigkeit, Spiegel-Zauber, Töne, Sprachausgabe |
-| 🚀 (rechts unten) | Kugel abschießen, wenn sie in der Gasse wartet |
+| ⚙️ | Menü: Buchstaben/Formen/Mix, Schwierigkeit, Zwischenspiele, Zahlenraum, Rechenarten, Töne, Sprachausgabe |
+| 🚀 (rechts unten) | Gedrückt halten lädt Kraft – loslassen schießt die Kugel ab |
 | Missions-Schild | Antippen liest die Mission vor 🔊 |
 | Blauer/roter Knopf unten | Flipper-Arme bewegen |
 
