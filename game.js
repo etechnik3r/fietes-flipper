@@ -228,11 +228,25 @@
   var loch = {
     x: 200, y: 150, r: LOCH_R,
     aktuell: 0,          // Index in KOERPER_3D
-    drehung: 0,          // laeuft in jedem Frame weiter -> Koerper rotiert
+    drehung: 0,          // dreht sich nur bei jeder Neuzeichnung weiter (s.u.)
     gefangen: false,     // Kugel gerade eingefangen?
     gefangenSeit: 0,
     blitzZeit: 0
   };
+  // Der rotierende 3D-Koerper wird NICHT jeden Frame neu gezeichnet (Kasten/
+  // Pyramide sortieren pro Aufruf mehrere Flaechen samt Farbverlaeufen –
+  // das kostet auf schwachen Geraeten spuerbar Rechenzeit). Stattdessen
+  // zeichnen wir ihn nur alle 2 Sekunden auf eine kleine Offscreen-Canvas
+  // und zeigen bis dahin einfach das zuletzt erzeugte Bild (drawImage ist
+  // fast kostenlos). Damit die Drehung trotzdem sichtbar bleibt, drehen wir
+  // pro Neuzeichnung gleich ein ganzes Stueck weiter statt in Mini-Schritten.
+  var LOCH_BILD_INTERVALL = 2000;
+  var LOCH_DREHSCHRITT = Math.PI / 4;
+  var lochBildGroesse = Math.ceil(LOCH_R * 0.62 * 2 + 20);
+  var lochBild = document.createElement("canvas");
+  lochBild.width = lochBild.height = lochBildGroesse;
+  var lochBildCtx = lochBild.getContext("2d");
+  var lochBildZuletzt = -Infinity;
   // Sensor-Kreis: die Kugel "faellt hinein" (kein Abprall), wir fangen sie
   // in der Kollisionslogik selbst ab.
   var lochBody = Bodies.circle(loch.x, loch.y, loch.r * 0.72, {
@@ -271,16 +285,17 @@
   //     zurueck ins Feld schubsen (klassisches Flipper-Element).
   //     WICHTIG: genug Abstand zur Einlauf-Schraege lassen (> Kugel-
   //     durchmesser), sonst verkeilt sich die Kugel in der Ecke.
+  //     Der Kollisionskoerper ist NUR die schraege Innenkante (ecken[0]-
+  //     ecken[1]), nicht das ganze Dreieck: so prallt die Kugel nur auf der
+  //     Innenseite ab, auf der Rueckseite (zur Aussenwand) gibt es keinen
+  //     Abpraller. Das Dreieck bleibt als reine Grafik (zeichneSling).
   var slings = [];
   [
     [{ x: 98, y: 396 }, { x: 138, y: 460 }, { x: 98, y: 460 }],
     [{ x: 298, y: 392 }, { x: 258, y: 452 }, { x: 298, y: 452 }]
   ].forEach(function (ecken, i) {
-    var body = Bodies.fromVertices(0, 0, [ecken], { isStatic: true, label: "sling-" + i });
-    // fromVertices zentriert die Form – wieder an die richtige Stelle ruecken
-    var mx = (ecken[0].x + ecken[1].x + ecken[2].x) / 3;
-    var my = (ecken[0].y + ecken[1].y + ecken[2].y) / 3;
-    Body.setPosition(body, { x: mx, y: my });
+    var body = wandSegment(ecken[0].x, ecken[0].y, ecken[1].x, ecken[1].y, 16);
+    body.label = "sling-" + i;
     slings.push({ body: body, ecken: ecken, blitzZeit: 0 });
   });
 
@@ -498,6 +513,7 @@
   function freigabeLoch() {
     loch.gefangen = false;
     loch.aktuell = (loch.aktuell + 1) % KOERPER_3D.length;  // naechster Koerper
+    lochBildZuletzt = -Infinity;    // neuen Koerper sofort zeichnen, nicht erst nach 2 s
     if (!state.laeuft) { return; }
     // Neue Kugel direkt unter dem Loch auswerfen (sanft nach unten ins Feld)
     kugel = Bodies.circle(loch.x, loch.y + loch.r + KUGEL_RADIUS + 2, KUGEL_RADIUS, {
@@ -620,7 +636,8 @@
     window.setTimeout(function () { el.lobBanner.hidden = true; }, 1500);
     werfeKonfetti();
     spielKlang("erfolg");
-    sprich(zufallAus(["Super gemacht!", "Klasse Treffer!", "Wunderbar!", "Du bist spitze!"]));
+    // Keine gesprochene Lobfloskel: Banner + Konfetti + Jubel-Klang zeigen
+    // den Erfolg schon deutlich, das muss nicht extra vorgelesen werden.
     // Neue Symbole verteilen und die naechste Mission ankuendigen
     window.setTimeout(verteileSymbole, 1600);
     planeMission(6000);
@@ -845,6 +862,7 @@
     ctx.setTransform(skala, 0, 0, skala, versatzX, versatzY);
 
     zeichneHintergrund();
+    zeichneDomLichter();
     zeichneGasse();
     slings.forEach(zeichneSling);
     zeichneLoch();
@@ -855,7 +873,53 @@
     zeichneFlipper(flipperR);
     malUndBewegeFunken();
     if (kugel) { zeichneKugel(); }
+    zeichneGlanzstreifen();
     zeichneVignette();
+  }
+
+  // --- Kranz bunter Lauflichter auf der Goldleiste der Kuppel: klassisches
+  //     Jahrmarkt-/Flipper-Detail, das dem Feld mehr Leben gibt. Guenstig zu
+  //     zeichnen (ein paar kleine Kreise), daher unbedenklich fuers Tempo.
+  var DOM_LICHTER = 14;
+  function zeichneDomLichter() {
+    var cx = 200, cy = 124, r = 192;
+    var jetzt = performance.now();
+    for (var i = 0; i < DOM_LICHTER; i++) {
+      var a = Math.PI + (i / (DOM_LICHTER - 1)) * Math.PI;
+      var x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      var hell = 0.4 + 0.6 * Math.max(0, Math.sin(jetzt / 260 + i * 0.65));
+      ctx.beginPath();
+      ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = KONFETTI_FARBEN[i % KONFETTI_FARBEN.length];
+      ctx.globalAlpha = hell;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // --- Glas-Glanzstreifen: ein sehr sanfter, diagonal ueber das Feld
+  //     wandernder Lichtreflex (wie eine Scheibe, in der sich das Licht
+  //     spiegelt) - macht das Feld lebendiger statt starr, ohne vom
+  //     eigentlichen Spiel abzulenken.
+  function zeichneGlanzstreifen() {
+    var t = (performance.now() / 4200) % 1;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(16, FELD_H);
+    ctx.lineTo(16, 124);
+    ctx.arc(200, 124, 184, Math.PI, 0);
+    ctx.lineTo(384, FELD_H);
+    ctx.closePath();
+    ctx.clip();
+    ctx.translate(-140 + t * (FELD_B + 380), 0);
+    ctx.rotate(0.34);
+    var g = ctx.createLinearGradient(-70, 0, 70, 0);
+    g.addColorStop(0, "rgba(255,255,255,0)");
+    g.addColorStop(0.5, "rgba(255,255,255,0.14)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(-70, -120, 140, FELD_H + 360);
+    ctx.restore();
   }
 
   // --- Spielfeld-Grund: dunkelblaues "Kabinett" mit Goldleiste, darin die
@@ -893,15 +957,18 @@
     ctx.stroke();
 
     // 3) Dezente Wiesen-Deko: Huegel + Bluemchen (Platzhalter fuer eigenes
-    //    Hintergrundbild - hier einfach drawImage() einsetzen)
-    ctx.fillStyle = "rgba(40, 192, 138, 0.08)";
+    //    Hintergrundbild - hier einfach drawImage() einsetzen). Etwas
+    //    kraeftigere Farben + mehr Bluemchen, damit das Feld weniger leer
+    //    und bunter wirkt.
+    ctx.fillStyle = "rgba(40, 192, 138, 0.11)";
     ctx.beginPath(); ctx.ellipse(90, 470, 120, 46, 0, Math.PI, 0); ctx.fill();
     ctx.beginPath(); ctx.ellipse(300, 480, 130, 52, 0, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = "rgba(47, 111, 214, 0.05)";
+    ctx.fillStyle = "rgba(47, 111, 214, 0.07)";
     ctx.beginPath(); ctx.arc(200, 210, 92, 0, Math.PI * 2); ctx.fill();
-    [[70, 130], [330, 140], [160, 400], [240, 388]].forEach(function (b) {
-      zeichneBluemchen(b[0], b[1]);
-    });
+    ctx.fillStyle = "rgba(243, 196, 74, 0.08)";
+    ctx.beginPath(); ctx.ellipse(200, 340, 140, 40, 0, 0, Math.PI * 2); ctx.fill();
+    [[70, 130], [330, 140], [160, 400], [240, 388], [110, 330], [290, 330]]
+      .forEach(function (b, i) { zeichneBluemchen(b[0], b[1], KONFETTI_FARBEN[i % KONFETTI_FARBEN.length]); });
 
     // 4) Rampen unten (Teil des Rahmens): fuehren zur Flipper-Ebene
     ctx.fillStyle = "#26375f";
@@ -929,14 +996,16 @@
     ctx.fill();
   }
 
-  function zeichneBluemchen(x, y) {
+  function zeichneBluemchen(x, y, farbe) {
     for (var i = 0; i < 5; i++) {
       var a = i / 5 * Math.PI * 2;
       ctx.beginPath();
       ctx.arc(x + Math.cos(a) * 5, y + Math.sin(a) * 5, 3.4, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(243, 169, 60, 0.35)";
+      ctx.fillStyle = mischeFarbe(farbe || "#f3c44a", "#ffffff", 0.3);
+      ctx.globalAlpha = 0.4;
       ctx.fill();
     }
+    ctx.globalAlpha = 1;
     ctx.beginPath();
     ctx.arc(x, y, 3, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(217, 69, 62, 0.4)";
@@ -1042,7 +1111,6 @@
   }
 
   function zeichneLoch() {
-    loch.drehung += 0.03;
     var x = loch.x, y = loch.y, r = loch.r;
 
     // Schatten + dunkle Oeffnung (Tiefe per Radialverlauf)
@@ -1067,8 +1135,20 @@
       ctx.stroke();
     }
 
-    // Der rotierende Koerper darauf
-    zeichneKoerper3D(KOERPER_3D[loch.aktuell], x, y, r * 0.62, loch.drehung);
+    // Der rotierende Koerper: nur alle 2 s neu auf die kleine Offscreen-
+    // Canvas zeichnen, sonst einfach das gecachte Bild einfuegen.
+    var jetzt = performance.now();
+    if (jetzt - lochBildZuletzt >= LOCH_BILD_INTERVALL) {
+      lochBildZuletzt = jetzt;
+      loch.drehung += LOCH_DREHSCHRITT;
+      lochBildCtx.clearRect(0, 0, lochBildGroesse, lochBildGroesse);
+      var mitte = lochBildGroesse / 2;
+      var vorherigerCtx = ctx;
+      ctx = lochBildCtx;
+      zeichneKoerper3D(KOERPER_3D[loch.aktuell], mitte, mitte, r * 0.62, loch.drehung);
+      ctx = vorherigerCtx;
+    }
+    ctx.drawImage(lochBild, x - lochBildGroesse / 2, y - lochBildGroesse / 2);
   }
 
   // Rotierender 3D-Koerper (Platzhalter-Vektorgrafik mit Dreh-Illusion)
@@ -1682,7 +1762,7 @@
     zeichneZeichnung();
     werfeKonfetti();
     spielKlang("erfolg");
-    sprich("Wunderbar gezeichnet! Hier kommt die nächste Kugel!");
+    sprich("Hier kommt die nächste Kugel!");
     window.setTimeout(schliesseZeichnen, 1600);
   }
 
@@ -1785,8 +1865,7 @@
       el.rechenHinweis.classList.add("erfolg");
       werfeKonfetti();
       spielKlang("richtig");
-      sprich(zufallAus(["Richtig!", "Super gerechnet!", "Genau!", "Klasse!"]) +
-             " Das ist " + loesung + ".");
+      sprich("Das ist " + loesung + ".");
       window.setTimeout(schliesseRechnen, 1400);
     } else {
       knopf.classList.add("falsch");
@@ -1878,7 +1957,6 @@
     passeCanvasAn();
     verteileSymbole();
     planeMission(6000);
-    sprich("Willkommen in der Pilz-Arena!");
     neueKugel();
   });
 
