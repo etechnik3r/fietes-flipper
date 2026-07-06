@@ -373,8 +373,27 @@ body {
   font-size: clamp(1.6rem, 7.5vw, 2.1rem);
   color: var(--ink);
 }
-.runde-bilanz { color: var(--muted); font-size: 1.05rem; }
-.runde-bilanz b { color: var(--ink); font-size: 1.3rem; }
+.runde-statistik {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 4px 0 2px;
+  padding: 0;
+  list-style: none;
+}
+.runde-statistik li {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 1.02rem;
+  background: rgba(47, 111, 214, 0.08);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+.runde-statistik b { color: var(--ink); font-size: 1.2rem; }
 .runde-weiter {
   margin-top: 10px;
   width: 100%;
@@ -602,6 +621,18 @@ body {
   color: var(--cta-deep);
   letter-spacing: 0.5px;
 }
+.popover .bestenliste {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.popover .bestenliste li:first-child { color: var(--cta-deep); }
 
 
 /* 9) EINSTELLUNGS-SEITE (Vollbild-Overlay, wie beim Uhrzeit-Uhu) ------------- */

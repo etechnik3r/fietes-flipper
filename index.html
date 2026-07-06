@@ -163,14 +163,19 @@
   </div>
 
 
-  <!-- RUNDEN-ENDE: alle Kugeln gespielt -> Feier mit Punkte-Bilanz
-       (bewusst KEIN "Game Over" - ein Tipp startet die naechste Runde). -->
+  <!-- SPIEL-ENDE: alle Kugeln gespielt -> Feier mit kleiner Abschluss-
+       Statistik (bewusst KEIN "Game Over"-Gefuehl - ein Tipp startet
+       sofort ein neues Spiel, Punkte + Sterne starten dabei bei Null). -->
   <div class="runde-overlay" id="runde-overlay" hidden>
     <div class="runde-karte">
       <span class="runde-pokal" aria-hidden="true">🏆</span>
-      <h2 class="runde-titel">Runde geschafft!</h2>
-      <p class="runde-bilanz">Du hast <b id="runde-punkte">0</b> Punkte gesammelt!</p>
-      <button type="button" class="runde-weiter" id="button-neue-runde">🚀 Neue Runde!</button>
+      <h2 class="runde-titel">Spiel zu Ende!</h2>
+      <ul class="runde-statistik">
+        <li>🔵 <b id="runde-punkte">0</b> Punkte gesammelt</li>
+        <li>⭐ <b id="runde-sterne">0</b> Missionen geschafft</li>
+        <li>🔤 <b id="runde-symbole">0</b> Formen &amp; Buchstaben entdeckt</li>
+      </ul>
+      <button type="button" class="runde-weiter" id="button-neue-runde">🚀 Noch mal spielen!</button>
     </div>
   </div>
 

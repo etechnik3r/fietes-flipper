@@ -64,13 +64,17 @@
   // gemuetlich, und die Stufen wachsen nur in kleinen Schritten (kein harter
   // Sprung). "abschussMin/Max" ist die Bandbreite des Plungers (siehe unten):
   // kurz druecken -> schwach, lange halten -> kraeftig.
+  // flipperKraft deutlich angehoben (+ Schonfrist fuer den Tempodeckel bei
+  // kickeVonFlipper, s.u.): ein gut getimter Schlag soll die Kugel wirklich
+  // bis zum Formen-Loch oben schiessen koennen statt sofort wieder auf
+  // maxTempo gedeckelt zu werden.
   var SCHWIERIGKEITEN = {
-    leicht:  { gravitation: 0.42, maxTempo: 7.5,  bumperKick: 5.4,
-               sling: { x: 3.2, y: -5.0 }, abschussMin: 8.5,  abschussMax: 15.0, flipperKraft: 0.58 },
-    mittel:  { gravitation: 0.54, maxTempo: 8.8,  bumperKick: 6.3,
-               sling: { x: 3.7, y: -5.8 }, abschussMin: 9.0,  abschussMax: 16.5, flipperKraft: 0.66 },
-    schnell: { gravitation: 0.68, maxTempo: 10.2, bumperKick: 7.4,
-               sling: { x: 4.3, y: -6.7 }, abschussMin: 9.5,  abschussMax: 18.0, flipperKraft: 0.76 }
+    leicht:  { gravitation: 0.42, maxTempo: 9.5,  bumperKick: 5.4,
+               sling: { x: 3.2, y: -5.0 }, abschussMin: 8.5,  abschussMax: 15.0, flipperKraft: 0.85 },
+    mittel:  { gravitation: 0.54, maxTempo: 11.0, bumperKick: 6.3,
+               sling: { x: 3.7, y: -5.8 }, abschussMin: 9.0,  abschussMax: 16.5, flipperKraft: 0.98 },
+    schnell: { gravitation: 0.68, maxTempo: 12.5, bumperKick: 7.4,
+               sling: { x: 4.3, y: -6.7 }, abschussMin: 9.5,  abschussMax: 18.0, flipperKraft: 1.12 }
   };
 
   // Punktwerte – bewusst simpel und grosszuegig
@@ -113,10 +117,10 @@
 
   var state = {
     laeuft: false,           // false bis der Titelscreen weggetippt wurde
-    punkte: 0,
-    sterne: 0,               // geschaffte Missionen
+    punkte: 0,               // startet bei JEDEM Spiel wieder bei Null
+    sterne: 0,               // geschaffte Missionen, ebenfalls pro Spiel
+    gesehenSymbole: {},      // welche Buchstaben/Formen in diesem Spiel schon dran waren
     baelle: BAELLE_PRO_RUNDE,// uebrige Kugeln in dieser Runde (Anzeige oben)
-    rundenStartPunkte: 0,    // Punktestand beim Rundenbeginn (fuer die Bilanz)
     symbole: "mix",          // Einstellung: buchstaben | formen | mix
     schwierigkeit: "leicht", // Einstellung: leicht | mittel | schnell
     zwischenspiele: true,    // Zwischenspiele zwischen den Kugeln?
@@ -140,7 +144,8 @@
     "symbol-blitz", "lob-banner", "zone-links", "zone-rechts",
     "anzeige-punkte", "anzeige-sterne", "anzeige-baelle",
     "stat-punkte", "stat-sterne", "stat-baelle",
-    "button-abschuss", "runde-overlay", "runde-punkte", "button-neue-runde",
+    "button-abschuss", "runde-overlay", "runde-punkte", "runde-sterne",
+    "runde-symbole", "button-neue-runde",
     "button-about", "button-einstellungen", "einstellungen",
     "einstellungen-zu", "einstellungen-fertig", "button-reset",
     "eltern-dialog", "eltern-frage", "eltern-antworten", "eltern-abbrechen",
@@ -254,15 +259,19 @@
   });
 
   // --- Pilz-Bumper: zwei grosse Kreise, die den Mittelweg zum Loch frei
-  //     lassen. "elemente" sammelt alles, was ein Symbol traegt (Bumper +
-  //     Tore) fuer Missionen & Rendering. Bumper sind bewusst groesser, damit
-  //     Buchstaben/Formen bequem auf dem Schild sitzen (nicht auf dem Rand).
+  //     lassen, plus zwei kleinere oben in den Kuppel-Ecken (dort ist noch
+  //     Platz, ohne den direkten Schussweg zum Loch zu versperren) - damit
+  //     oben im Feld mehr los ist. "elemente" sammelt alles, was ein Symbol
+  //     traegt (Bumper + Tore) fuer Missionen & Rendering. Die grossen
+  //     Bumper sind bewusst groesser, damit Buchstaben/Formen bequem auf
+  //     dem Schild sitzen (nicht auf dem Rand).
   var elemente = [];         // { art, body, x, y, r/w, symbol, blitzZeit }
 
-  [{ x: 88, y: 256 }, { x: 312, y: 256 }]
+  [{ x: 88, y: 256, r: 33 }, { x: 312, y: 256, r: 33 },
+   { x: 140, y: 60, r: 20 }, { x: 260, y: 60, r: 20 }]
     .forEach(function (p, i) {
-      var body = Bodies.circle(p.x, p.y, 33, { isStatic: true, label: "bumper-" + i });
-      elemente.push({ art: "bumper", body: body, x: p.x, y: p.y, r: 33, symbol: null, blitzZeit: 0 });
+      var body = Bodies.circle(p.x, p.y, p.r, { isStatic: true, label: "bumper-" + i });
+      elemente.push({ art: "bumper", body: body, x: p.x, y: p.y, r: p.r, symbol: null, blitzZeit: 0 });
     });
 
   // --- Tore: drei "Tuerchen" (abgerundete Kloetze) an Kuppel und Seiten.
@@ -443,7 +452,12 @@
       x: kugel.velocity.x + (-omega * hebelY) * 0.016,
       y: kugel.velocity.y + ( omega * hebelX) * 0.016 - 2.5
     });
-    begrenzeTempo();
+    // Kurze Schonfrist fuer den Tempodeckel (wie beim Abschuss): ein
+    // kraftvoller, gut getimter Schlag soll wirklich bis nach oben
+    // durchschiessen koennen, statt im selben Frame wieder gedeckelt zu
+    // werden. Direkt danach begrenzeTempo() aufzurufen wuerde genau das
+    // verhindern.
+    klammerPauseBis = Math.max(klammerPauseBis, performance.now() + 400);
   }
 
   function elementZuLabel(label) {
@@ -467,17 +481,25 @@
     spawnFunken(e.x, e.y, "#f3c44a");
     zeigeSymbol(e.symbol);
     pruefeMission(e);
+    wechsleSymbolBeiWiederholung(e);
   }
 
   function aufTor(body) {
     if (!darfTreffen(body.label)) { return; }
     var e = elementZuLabel(body.label);
     e.blitzZeit = performance.now();
+    // Kick wie beim Pilz-Bumper: ohne aktiven Schubs wirkt das rechteckige
+    // Tor "tot" (kaum Rueckprall) - etwas schwaecher als der Bumper-Kick.
+    var dx = kugel.position.x - e.x, dy = kugel.position.y - e.y;
+    var d = Math.hypot(dx, dy) || 1;
+    var kick = K().bumperKick * 0.85;
+    Body.setVelocity(kugel, { x: dx / d * kick, y: dy / d * kick });
     gibPunkte(PUNKTE_TOR);
     spielKlang("tor");
     spawnFunken(e.x, e.y, "#2f6fd6");
     zeigeSymbol(e.symbol);
     pruefeMission(e);
+    wechsleSymbolBeiWiederholung(e);
   }
 
   function aufSling(body) {
@@ -504,7 +526,7 @@
 
     var k = KOERPER_3D[loch.aktuell];
     gibPunkte(PUNKTE_LOCH);
-    spielKlang("tor");
+    spielKlang("loch");
     spawnFunken(loch.x, loch.y, k.farbe);
     zeigeKoerper3dName(k);                    // gross einblenden + vorlesen
     window.setTimeout(freigabeLoch, 2000);
@@ -553,6 +575,24 @@
       sprich(symbol.zeichen);
     }
     blitz.classList.add("zeigt");
+    state.gesehenSymbole[symbol.id] = true;   // fuer die Abschluss-Statistik
+  }
+
+  // Wird ein und dasselbe Element (z. B. ein leicht erreichbarer Bumper)
+  // mehrfach hintereinander getroffen, sagte die Sprachausgabe bisher
+  // immer denselben Buchstaben - das wird schnell eintoenig. Darum bekommt
+  // das getroffene Element (ausser dem aktuellen Missionsziel) kurz nach
+  // dem Treffer ein frisches, von den anderen Elementen verschiedenes
+  // Symbol, so wechseln vielbespielte Stellen deutlich oefter.
+  function wechsleSymbolBeiWiederholung(e) {
+    window.setTimeout(function () {
+      if (state.mission && state.mission.element === e) { return; }
+      var benutzt = {};
+      elemente.forEach(function (other) {
+        if (other.symbol) { benutzt[other.symbol.id] = true; }
+      });
+      e.symbol = neuesSymbol(benutzt);   // "benutzt" enthaelt auch e's altes Symbol
+    }, 900);
   }
 
   function gibPunkte(n) {
@@ -782,25 +822,36 @@
     }
   }
 
-  // --- Rundenende: KEIN "Game Over", sondern eine Feier mit Punkte-Bilanz.
-  //     Ein Tipp auf den grossen Knopf startet die naechste Runde (der
-  //     Punktestand laeuft einfach weiter).
+  // --- Spielende: KEIN Strafgefuehl, sondern eine Feier mit kleiner
+  //     Abschluss-Statistik. Punkte + Sterne starten bei JEDEM neuen Spiel
+  //     wieder bei Null - das beste Ergebnis merkt sich die Bestenliste
+  //     (Klick auf die Punkte-/Sterne-Anzeige oben zeigt die Top 5).
   function zeigeRundenEnde() {
-    var rundenPunkte = state.punkte - state.rundenStartPunkte;
-    el.rundePunkte.textContent = rundenPunkte;
+    trageBestenlisteEin(state.punkte, state.sterne);
+    el.rundePunkte.textContent = state.punkte;
+    el.rundeSterne.textContent = state.sterne;
+    el.rundeSymbole.textContent = Object.keys(state.gesehenSymbole).length;
     el.rundeOverlay.hidden = false;
     werfeKonfetti();
     spielKlang("erfolg");
-    sprich("Runde geschafft! Du hast " + rundenPunkte + " Punkte gesammelt!");
+    sprich("Spiel zu Ende! Du hast " + state.punkte + " Punkte gesammelt!");
   }
-  el.buttonNeueRunde.addEventListener("click", function () {
+  function starteNeuesSpiel() {
     el.rundeOverlay.hidden = true;
     state.baelle = BAELLE_PRO_RUNDE;
-    state.rundenStartPunkte = state.punkte;
+    state.punkte = 0;
+    state.sterne = 0;
+    state.gesehenSymbole = {};
     el.anzeigeBaelle.textContent = state.baelle;
+    el.anzeigePunkte.textContent = 0;
+    el.anzeigeSterne.textContent = 0;
+    state.mission = null;
+    el.missionText.textContent = "Los geht’s!";
     verteileSymbole();
+    planeMission(4000);
     neueKugel();
-  });
+  }
+  el.buttonNeueRunde.addEventListener("click", starteNeuesSpiel);
 
 
   /* 8. RENDERING -------------------------------------------------------------
@@ -1906,7 +1957,8 @@
       flipper:      { toene: [180],                 art: "square",   laut: 0.10, dauer: 0.08 },
       bumper:       { toene: [660 + Math.random() * 220], art: "triangle", laut: 0.22, dauer: 0.18 },
       sling:        { toene: [420],                 art: "triangle", laut: 0.16, dauer: 0.12 },
-      tor:          { toene: [523.25, 783.99],      art: "triangle", laut: 0.2,  dauer: 0.16 },
+      tor:          { toene: [523.25 + Math.random() * 40, 783.99], art: "triangle", laut: 0.2, dauer: 0.16 },
+      loch:         { toene: [392, 493.88, 587.33, 783.99], art: "triangle", laut: 0.22, dauer: 0.16 },
       mission:      { toene: [523.25, 659.25, 880], art: "triangle", laut: 0.2,  dauer: 0.18 },
       erfolg:       { toene: [523.25, 659.25, 783.99, 1046.5], art: "triangle", laut: 0.24, dauer: 0.2 },
       start:        { toene: [392, 523.25],         art: "sine",     laut: 0.16, dauer: 0.14 },
@@ -1951,7 +2003,6 @@
     weckeAudio();
     state.laeuft = true;
     state.baelle = BAELLE_PRO_RUNDE;
-    state.rundenStartPunkte = state.punkte;
     el.anzeigeBaelle.textContent = state.baelle;
     wendeSchwierigkeitAn();
     passeCanvasAn();
@@ -1984,7 +2035,7 @@
     var box = ankerKnopf.getBoundingClientRect();
     el.popover.style.top = (box.bottom + 8) + "px";
     el.popover.style.left = Math.min(box.left, window.innerWidth - 276) + "px";
-    popoverTimer = window.setTimeout(function () { el.popover.hidden = true; }, 3800);
+    popoverTimer = window.setTimeout(function () { el.popover.hidden = true; }, 5200);
   }
   el.buttonAbout.addEventListener("click", function () {
     zeigePopover(
@@ -1993,10 +2044,12 @@
       '<span class="about-studio">ein Spiel von JONFIE STUDIOS</span>', el.buttonAbout);
   });
   el.statPunkte.addEventListener("click", function () {
-    zeigePopover("🔵 Deine <b>Punkte</b>: Jeder Pilz und jedes Tor gibt Punkte!", el.statPunkte);
+    zeigePopover("🔵 Deine <b>Punkte</b>: Jeder Pilz und jedes Tor gibt Punkte!" +
+      "<br>🏆 Top 5: " + top5Html("punkte", "🔵"), el.statPunkte);
   });
   el.statSterne.addEventListener("click", function () {
-    zeigePopover("⭐ Deine <b>Sterne</b>: Für jede geschaffte Mission gibt es einen Stern!", el.statSterne);
+    zeigePopover("⭐ Deine <b>Sterne</b>: Für jede geschaffte Mission gibt es einen Stern!" +
+      "<br>🏆 Top 5: " + top5Html("sterne", "⭐"), el.statSterne);
   });
   el.statBaelle.addEventListener("click", function () {
     zeigePopover("🎱 Deine <b>Kugeln</b>: So viele Kugeln hast du noch in dieser Runde!", el.statBaelle);
@@ -2085,23 +2138,28 @@
   });
   el.elternAbbrechen.addEventListener("click", function () { schliesseModal(el.elternDialog); });
 
-  // --- Speichern/Laden (Punkte, Sterne, Einstellungen)
+  // --- Speichern/Laden (nur Einstellungen - Punkte & Sterne starten
+  //     bewusst bei JEDEM Spiel wieder bei Null, siehe Bestenliste unten).
+  //     WICHTIG: diese Funktion hiess vorher auch "ladeStand" - genau wie
+  //     die Ladestand-Funktion des Plungers weiter oben. Zwei gleichnamige
+  //     function-Deklarationen im selben Scope ueberschreiben sich einfach
+  //     (kein Fehler!) - dadurch rief die Kraftanzeige-Grafik in Wahrheit
+  //     IMMER diese Speicher-Funktion auf und bekam nie den Ladestand
+  //     zurueck. Umbenannt, damit beide Funktionen wieder unabhaengig sind.
   function speichereStand() {
     try {
       window.localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify({
-        punkte: state.punkte, sterne: state.sterne, symbole: state.symbole,
+        symbole: state.symbole,
         schwierigkeit: state.schwierigkeit, zwischenspiele: state.zwischenspiele,
         rechnen: state.rechnen, toene: state.toene, sprache: state.sprache
       }));
     } catch (fehler) { /* privater Modus o.ae. - dann eben ohne Speichern */ }
   }
-  function ladeStand() {
+  function ladeGespeichertenStand() {
     try {
       var roh = window.localStorage.getItem(SPEICHER_SCHLUESSEL);
       if (!roh) { return; }
       var d = JSON.parse(roh);
-      if (typeof d.punkte === "number") { state.punkte = d.punkte; }
-      if (typeof d.sterne === "number") { state.sterne = d.sterne; }
       if (typeof d.symbole === "string") { state.symbole = d.symbole; }
       if (SCHWIERIGKEITEN[d.schwierigkeit]) { state.schwierigkeit = d.schwierigkeit; }
       // Zwischenspiele (neuer Schluessel, aber alten "spiegel" noch respektieren)
@@ -2118,8 +2176,34 @@
       if (typeof d.toene === "boolean") { state.toene = d.toene; }
       if (typeof d.sprache === "boolean") { state.sprache = d.sprache; }
     } catch (fehler) { /* kaputte Daten ignorieren */ }
-    el.anzeigePunkte.textContent = state.punkte;
-    el.anzeigeSterne.textContent = state.sterne;
+  }
+
+  // --- Bestenliste: die letzten Ergebnisse (Punkte + Sterne) je Spiel,
+  //     damit trotz Reset-bei-jedem-Spiel etwas Motivierendes uebrig
+  //     bleibt. Klick auf die Punkte-/Sterne-Anzeige zeigt die Top 5.
+  var BESTENLISTE_SCHLUESSEL = "fietes-formenflipper-bestenliste";
+  var bestenliste = [];   // [{ punkte, sterne }, ...]
+  function ladeBestenliste() {
+    try {
+      var roh = window.localStorage.getItem(BESTENLISTE_SCHLUESSEL);
+      var d = roh ? JSON.parse(roh) : null;
+      if (Array.isArray(d)) { bestenliste = d; }
+    } catch (fehler) { bestenliste = []; }
+  }
+  function trageBestenlisteEin(punkte, sterne) {
+    bestenliste.push({ punkte: punkte, sterne: sterne });
+    bestenliste.sort(function (a, b) { return b.punkte - a.punkte; });
+    bestenliste = bestenliste.slice(0, 20);   // Historie fuer beide Top-5-Ansichten
+    try { window.localStorage.setItem(BESTENLISTE_SCHLUESSEL, JSON.stringify(bestenliste)); }
+    catch (fehler) { /* privater Modus o.ae. - dann eben ohne Speichern */ }
+  }
+  // Top 5 nach "feld" (punkte|sterne) sortiert, als kleine HTML-Liste
+  function top5Html(feld, symbol) {
+    if (!bestenliste.length) { return "<i>Noch keine Ergebnisse</i>"; }
+    var sortiert = bestenliste.slice().sort(function (a, b) { return b[feld] - a[feld]; });
+    return "<ol class=\"bestenliste\">" + sortiert.slice(0, 5).map(function (e) {
+      return "<li>" + e[feld] + " " + symbol + "</li>";
+    }).join("") + "</ol>";
   }
 
   // --- Service Worker: macht das Spiel offline-faehig (PWA)
@@ -2130,7 +2214,8 @@
   }
 
   // --- Los geht's
-  ladeStand();
+  ladeGespeichertenStand();
+  ladeBestenliste();
   wendeSchwierigkeitAn();
   el.anzeigeBaelle.textContent = state.baelle;
   passeCanvasAn();
