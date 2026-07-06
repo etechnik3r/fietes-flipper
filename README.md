@@ -90,3 +90,5 @@ Als App: die Seite im Browser „Zum Startbildschirm hinzufügen“, dann läuft
 das Spiel auch **offline**. Tipp: Sprachausgabe und Töne funktionieren am
 zuverlässigsten über einen lokalen Webserver, z. B.
 `python3 -m http.server 8000` → `http://localhost:8000`.
+
+Als GitHub Pages: [etechnik3r.github.io/fietes-flipper](https://etechnik3r.github.io/fietes-flipper/).
