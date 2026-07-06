@@ -8,14 +8,14 @@
    (gleich mit der ?v=NUMMER in index.html) – sonst liefert der Cache alt aus.
    ===========================================================================*/
 
-var VERSION = "v3";
+var VERSION = "v4";
 var CACHE_NAME = "fietes-formenflipper-" + VERSION;
 
 var DATEIEN = [
   "./",
   "index.html",
-  "style.css?v=3",
-  "game.js?v=3",
+  "style.css?v=4",
+  "game.js?v=4",
   "matter.min.js",
   "manifest.webmanifest",
   "icon.svg",
