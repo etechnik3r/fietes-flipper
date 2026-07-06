@@ -277,11 +277,13 @@
   // --- Tore: drei "Tuerchen" (abgerundete Kloetze) an Kuppel und Seiten.
   //     Das obere ist MINIMAL geneigt, damit die Kugel nicht darauf
   //     liegen bleiben kann, sondern immer herunterrollt.
-  //     Die seitlichen Tore liegen BUENDIG an ihrer Wand (leicht ueberlappend):
-  //     bleibt ein schmaler Spalt, kann sich die Kugel dort einklemmen.
+  //     Die seitlichen Tore liegen deutlich staerker geneigt und mit mehr
+  //     Ueberlappung an ihrer Wand als frueher: ein schmaler, fast
+  //     paralleler Spalt zur Wand liess die Kugel dort in einer schnellen
+  //     Ping-Pong-Schleife haengen bleiben.
   [{ x: 200, y: 88, winkel: 0.08 },
-   { x: 44,  y: 336, winkel:  0.42 },
-   { x: 320, y: 336, winkel: -0.42 }]
+   { x: 36,  y: 336, winkel:  0.52 },
+   { x: 328, y: 336, winkel: -0.52 }]
     .forEach(function (p, i) {
       var body = Bodies.rectangle(p.x, p.y, 62, 30, {
         isStatic: true, angle: p.winkel, label: "tor-" + i, chamfer: { radius: 10 }
@@ -834,6 +836,38 @@
         y: -5
       });
       stillstandSeit = 0;
+    }
+  }
+
+  // Zweite Anti-Klemm-Sicherung, unabhaengig von der Geschwindigkeit: prallt
+  // die Kugel schnell zwischen zwei nahen Elementen hin und her (Bumper,
+  // Tor, Sling), bleibt sie auf einen winzigen Bereich beschraenkt, OBWOHL
+  // sie dabei recht schnell unterwegs ist - pruefeStillstand() (die nur auf
+  // NIEDRIGES Tempo achtet) greift da nicht. Darum hier zusaetzlich die
+  // Positions-Spannweite der letzten 1,4 s beobachten: bewegt sich die
+  // Kugel in dieser Zeit kaum vom Fleck, war sie eingeklemmt - unabhaengig
+  // davon, ueber welchen Code-Pfad das passiert ist.
+  var positionsVerlauf = [];   // { x, y, zeit }
+  function pruefeEingeklemmt() {
+    if (!kugel || !state.kugelUnterwegs || state.wartetAufAbschuss) {
+      positionsVerlauf = []; return;
+    }
+    var jetzt = performance.now();
+    positionsVerlauf.push({ x: kugel.position.x, y: kugel.position.y, zeit: jetzt });
+    while (positionsVerlauf.length && jetzt - positionsVerlauf[0].zeit > 1400) {
+      positionsVerlauf.shift();
+    }
+    // erst urteilen, wenn wirklich ueber die volle Zeitspanne beobachtet wurde
+    if (positionsVerlauf.length < 30 || jetzt - positionsVerlauf[0].zeit < 1300) { return; }
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    positionsVerlauf.forEach(function (p) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    });
+    if (Math.max(maxX - minX, maxY - minY) < 55) {
+      positionsVerlauf = [];
+      var seitlich = (kugel.position.x < 200 ? 1 : -1) * (3 + Math.random() * 2);
+      Body.setVelocity(kugel, { x: seitlich, y: -6 - Math.random() * 3 });
     }
   }
 
@@ -1643,6 +1677,7 @@
     begrenzeTempo();
     pruefeGasse();
     pruefeStillstand();
+    pruefeEingeklemmt();
     pruefeKugelVerlust();
     zeichneFeld();
   }
