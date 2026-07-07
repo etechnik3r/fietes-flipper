@@ -52,7 +52,7 @@
   <!-- PWA: installierbar + offline (siehe manifest.webmanifest / sw.js).
        Schriften liegen lokal in fonts/ (kein CDN noetig). -->
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
 </head>
 
@@ -79,10 +79,12 @@
 
   <!-- 1) TOP-BAR: Marke, Punkte + Missions-Sterne, Menue -->
   <header class="top-bar">
-    <!-- Klick auf den Frosch zeigt Spielname + Studio -->
+    <!-- Klick auf das Logo zeigt Spielname + Studio -->
     <button type="button" class="marke" id="button-about" aria-label="Über das Spiel">
-      <span class="marke-frosch" aria-hidden="true">🐸</span>
-      <span class="marke-text">Formenflipper</span>
+      <span class="marke-logo" aria-hidden="true">
+        <span class="marke-logo-text"><span>F</span><span>F</span></span>
+      </span>
+      <span class="marke-text">Fietes Flipper</span>
     </button>
     <div class="status">
       <button type="button" class="stat" id="stat-baelle" aria-label="Übrige Kugeln in dieser Runde">
@@ -379,6 +381,6 @@
 
   <!-- Physik-Bibliothek (lokal, offline-faehig) + Spiellogik -->
   <script src="matter.min.js"></script>
-  <script src="game.js?v=6"></script>
+  <script src="game.js?v=7"></script>
 </body>
 </html>

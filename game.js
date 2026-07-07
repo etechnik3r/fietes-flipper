@@ -250,7 +250,17 @@
   //     oeffneKlappe in Abschnitt 7): offen waehrend die Kugel hochsteigt,
   //     geschlossen sobald sie im Feld ist - so bleibt der Schacht leer,
   //     bis die naechste Kugel bereitsteht.
-  var klappeKoerper = wandSegment(GASSE_X - 2, 178, 397, 178, 11);
+  //     WICHTIG: bewusst SCHRAEG (nicht waagerecht) - sonst koennte eine
+  //     Kugel von oben genau auf der Klappe liegen bleiben. So rollt sie
+  //     immer zur Feldseite (nach links unten) herunter.
+  var KLAPPE_HINGE = { x: GASSE_X - 2, y: 180 };
+  var KLAPPE_LAENGE = 47;
+  var KLAPPE_WINKEL_ZU = -0.33;      // ~19 Grad Gefaelle zur Aussenwand hin
+  var klappeKoerper = wandSegment(
+    KLAPPE_HINGE.x, KLAPPE_HINGE.y,
+    KLAPPE_HINGE.x + KLAPPE_LAENGE * Math.cos(KLAPPE_WINKEL_ZU),
+    KLAPPE_HINGE.y + KLAPPE_LAENGE * Math.sin(KLAPPE_WINKEL_ZU),
+    11);
   var klappeGeschlossen = false;
   function schliesseKlappe() {
     if (klappeGeschlossen) { return; }
@@ -627,7 +637,15 @@
     });
     World.add(engine.world, kugel);
     kugelSpur = [];
-    Body.setVelocity(kugel, { x: (Math.random() - 0.5) * 3, y: 3.5 });
+    // Bewusst kraeftig zur Seite auswerfen (zufaellig links oder rechts) statt
+    // gerade nach unten: sonst faellt die Kugel exakt durch die Luecke
+    // zwischen den beiden grossen Bumpern direkt in den Abfluss. Der
+    // Seitwaerts-Schubs schickt sie stattdessen Richtung Bumper/Feldrand.
+    var richtung = Math.random() < 0.5 ? -1 : 1;
+    Body.setVelocity(kugel, {
+      x: richtung * (4.2 + Math.random() * 2.2),
+      y: 2 + Math.random() * 1.4
+    });
     spielKlang("abschuss");
   }
 
@@ -1319,23 +1337,25 @@
 
     // Rueckschlag-Klappe: schwingt am Gassen-Ausgang zu, sobald die Kugel
     // im Feld ist (schliesseKlappe/oeffneKlappe, Abschnitt 7/3) - und
-    // schwenkt wieder hoch, sobald die naechste Kugel bereitsteht.
+    // schwenkt wieder hoch, sobald die naechste Kugel bereitsteht. Im Zu-
+    // Zustand bewusst schraeg (KLAPPE_WINKEL_ZU), damit keine Kugel darauf
+    // liegen bleiben kann, sondern immer nach links ins Feld herunterrollt.
     var klappeZiel = klappeGeschlossen ? 1 : 0;
     klappeAnim += (klappeZiel - klappeAnim) * 0.22;
-    var hingeX = GASSE_X - 2, hingeY = 178, klappeLaenge = 46;
-    var klappeWinkel = -1.35 * (1 - klappeAnim);
+    var klappeOffenWinkel = -1.35;
+    var klappeWinkel = klappeOffenWinkel + (KLAPPE_WINKEL_ZU - klappeOffenWinkel) * klappeAnim;
     ctx.save();
-    ctx.translate(hingeX, hingeY);
+    ctx.translate(KLAPPE_HINGE.x, KLAPPE_HINGE.y);
     ctx.rotate(klappeWinkel);
     ctx.lineCap = "round";
     ctx.strokeStyle = klappeAnim > 0.5 ? "#d9453e" : "#8a97b8";
     ctx.lineWidth = 9;
     ctx.beginPath();
-    ctx.moveTo(0, 0); ctx.lineTo(klappeLaenge, 0);
+    ctx.moveTo(0, 0); ctx.lineTo(KLAPPE_LAENGE, 0);
     ctx.stroke();
     ctx.restore();
     ctx.beginPath();
-    ctx.arc(hingeX, hingeY, 5, 0, Math.PI * 2);
+    ctx.arc(KLAPPE_HINGE.x, KLAPPE_HINGE.y, 5, 0, Math.PI * 2);
     ctx.fillStyle = "#26375f";
     ctx.fill();
 
@@ -2417,7 +2437,8 @@
   }
   el.buttonAbout.addEventListener("click", function () {
     zeigePopover(
-      '<span class="about-titel">🐸 Fietes Flipper</span>' +
+      '<span class="about-titel"><span class="marke-logo klein" aria-hidden="true">' +
+      '<span class="marke-logo-text"><span>F</span><span>F</span></span></span> Fietes Flipper</span>' +
       '<span class="about-unter">Buchstaben, Formen &amp; Zahlen</span>' +
       '<span class="about-studio">ein Spiel von JONFIE STUDIOS</span>', el.buttonAbout);
   });
