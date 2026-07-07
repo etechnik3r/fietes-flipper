@@ -128,7 +128,41 @@ body {
   transition: transform 0.1s ease;
 }
 .marke:active { transform: scale(0.94); }
-.marke-frosch { font-size: 1.7rem; line-height: 1; }
+
+/* Eigenes FF-Monogramm statt Emoji-Logo: emailleartiges Schild in den
+   Spielfarben (Gold auf dunklem Blau), passt zu jedem Thema. */
+.marke-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #3a6fd8 0%, #1d2c54 100%);
+  border: 2px solid var(--gold);
+  box-shadow: 0 3px 8px rgba(30, 44, 82, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+.marke-logo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.35), transparent 45%);
+}
+.marke-logo-text {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -0.09em;
+  display: inline-flex;
+  position: relative;
+}
+.marke-logo-text span:first-child { color: #ffffff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3); }
+.marke-logo-text span:last-child  { color: var(--gold); margin-left: -0.03em; }
+.marke-logo.klein { width: 1.5rem; height: 1.5rem; border-radius: 7px; border-width: 1.5px; vertical-align: middle; }
+.marke-logo.klein .marke-logo-text { font-size: 0.78rem; }
 .marke-text {
   font-family: var(--font-display);
   font-size: 1.2rem;
@@ -943,7 +977,8 @@ body {
 @media (max-width: 600px) and (max-height: 820px) {
   .menue-button { width: 42px; height: 42px; }
   .menue-icon { font-size: 1.4rem; }
-  .marke-frosch { font-size: 1.45rem; }
+  .marke-logo { width: 1.8rem; height: 1.8rem; }
+  .marke-logo .marke-logo-text { font-size: 0.9rem; }
   .stat { padding: 4px 10px 4px 9px; gap: 5px; }
   .stat-icon, .stat-wert { font-size: 1.05rem; }
 }

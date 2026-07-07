@@ -1,28 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- App-Icon: Pilz-Bumper mit Buchstabe + Flipperkugel, Palette wie im Spiel -->
+  <!-- App-Icon: FF-Monogramm (Fietes Flipper) - themen-neutral, Palette wie im Spiel -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2b4373"/>
+      <stop offset="0" stop-color="#3a6fd8"/>
       <stop offset="1" stop-color="#1d2c54"/>
     </linearGradient>
-    <radialGradient id="kugel" cx="0.35" cy="0.35" r="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#9fb0d4"/>
-    </radialGradient>
+    <linearGradient id="glanz" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
   </defs>
   <rect width="100" height="100" rx="22" fill="url(#bg)"/>
-  <rect x="4" y="4" width="92" height="92" rx="18" fill="none" stroke="#f3c44a" stroke-width="3"/>
-  <!-- Pilz -->
-  <ellipse cx="46" cy="66" rx="12" ry="14" fill="#f2e3c8"/>
-  <circle cx="46" cy="46" r="26" fill="#e0503f" stroke="#b23a2c" stroke-width="2.5"/>
-  <circle cx="32" cy="37" r="4.5" fill="#ffffff" opacity="0.9"/>
-  <circle cx="58" cy="32" r="3.5" fill="#ffffff" opacity="0.9"/>
-  <circle cx="60" cy="56" r="3" fill="#ffffff" opacity="0.9"/>
-  <circle cx="46" cy="46" r="15" fill="#ffffff"/>
-  <text x="46" y="47" font-family="'Baloo 2', 'Trebuchet MS', sans-serif" font-size="22"
-        font-weight="800" fill="#1e2c52" text-anchor="middle" dominant-baseline="central">A</text>
-  <!-- Kugel saust vorbei -->
-  <circle cx="78" cy="74" r="10" fill="url(#kugel)" stroke="#5f6e96" stroke-width="1.5"/>
-  <path d="M60 84 Q68 80 72 72" fill="none" stroke="#f3c44a" stroke-width="3"
-        stroke-linecap="round" opacity="0.8"/>
+  <rect width="100" height="100" rx="22" fill="url(#glanz)"/>
+  <rect x="4" y="4" width="92" height="92" rx="18" fill="none" stroke="#f3c44a" stroke-width="4"/>
+  <text x="33" y="59" font-family="'Baloo 2', 'Trebuchet MS', sans-serif" font-size="52"
+        font-weight="800" fill="#ffffff" text-anchor="middle" dominant-baseline="central"
+        style="text-shadow:0 2px 3px rgba(0,0,0,0.35)">F</text>
+  <text x="67" y="59" font-family="'Baloo 2', 'Trebuchet MS', sans-serif" font-size="52"
+        font-weight="800" fill="#f3c44a" text-anchor="middle" dominant-baseline="central">F</text>
 </svg>
