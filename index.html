@@ -1,11 +1,15 @@
 <!DOCTYPE html>
 <!--
   ============================================================================
-  Fietes Formenflipper: Die Pilz-Arena
+  Fietes Flipper
   ----------------------------------------------------------------------------
   Kindgerechtes Flipper-Lernspiel (ca. 6 Jahre) rund um Buchstaben und
   geometrische Formen. Gleiche Design-Sprache wie "Uhrzeit-Uhu"
   (JONFIE STUDIOS): grosse Touch-Flaechen, wenig Text, weiche Schatten.
+
+  Drei austauschbare Themen (Einstellungen -> Thema): Pilz-Arena, Weltraum,
+  Dino-Zeit. Nur die Optik (Bumper-Grafik + Hintergrund-Deko) unterscheidet
+  sich - Spielfeld-Aufbau und Lerninhalte sind fuer alle drei identisch.
 
   Struktur (dieses File) / Aussehen (style.css) / Logik (game.js) getrennt.
   Physik: matter.min.js (lokal eingebunden, kein CDN -> offline-faehig).
@@ -43,12 +47,12 @@
   <meta name="description" content="Kindgerechtes Flipper-Lernspiel: Buchstaben und Formen treffen, Spiegelbilder zeichnen.">
   <meta name="theme-color" content="#8fb2e6">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>Fietes Formenflipper: Die Pilz-Arena</title>
+  <title>Fietes Flipper</title>
 
   <!-- PWA: installierbar + offline (siehe manifest.webmanifest / sw.js).
        Schriften liegen lokal in fonts/ (kein CDN noetig). -->
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
 </head>
 
@@ -58,11 +62,17 @@
        Spiel (und schaltet gleichzeitig Audio frei - Browser verlangen dafuer
        eine Nutzer-Geste). -->
   <div class="titelscreen" id="titelscreen" role="button" aria-label="Tippe, um das Spiel zu starten">
-    <span class="titel-frosch" aria-hidden="true">🐸</span>
-    <h1 class="titel-name">Fietes Formenflipper</h1>
-    <p class="titel-unter">Die Pilz-Arena</p>
-    <p class="titel-symbole" aria-hidden="true">🍄 🔤 ⭐ 🔺 🟦</p>
-    <p class="titel-tipp">👆 Tippe, um zu starten</p>
+    <span class="titel-funke titel-funke-1" aria-hidden="true">✦</span>
+    <span class="titel-funke titel-funke-2" aria-hidden="true">✦</span>
+    <span class="titel-funke titel-funke-3" aria-hidden="true">✦</span>
+    <div class="titel-rahmen">
+      <span class="titel-rahmen-glanz" aria-hidden="true"></span>
+      <span class="titel-icon" id="titel-icon" aria-hidden="true">🍄</span>
+      <h1 class="titel-name">Fietes Flipper</h1>
+      <p class="titel-unter">Buchstaben, Formen &amp; Zahlen</p>
+      <p class="titel-symbole" aria-hidden="true">🔤 ⭐ 🔺 🟦</p>
+      <p class="titel-tipp">👆 Tippe, um zu starten</p>
+    </div>
     <p class="titel-studio">ein Spiel von JONFIE STUDIOS</p>
   </div>
 
@@ -214,6 +224,25 @@
           </div>
         </section>
 
+        <!-- Thema: aendert nur die Optik (Bumper, Hintergrund), Spielfeld bleibt gleich -->
+        <section class="opt-gruppe">
+          <h3 class="opt-titel">🎨 Thema</h3>
+          <div class="opt-reihe">
+            <button type="button" class="opt-karte" data-setting="thema" data-wert="pilz">
+              <span class="opt-icon">🍄</span><span class="opt-name">Pilz-Arena</span>
+              <span class="opt-text">Wiese &amp; Pilze</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="thema" data-wert="weltraum">
+              <span class="opt-icon">🚀</span><span class="opt-name">Weltraum</span>
+              <span class="opt-text">Planeten &amp; Sterne</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="thema" data-wert="dino">
+              <span class="opt-icon">🦕</span><span class="opt-name">Dino-Zeit</span>
+              <span class="opt-text">Dschungel &amp; Eier</span>
+            </button>
+          </div>
+        </section>
+
         <!-- Schwierigkeit: steuert nur das Kugeltempo -->
         <section class="opt-gruppe">
           <h3 class="opt-titel">🎚️ Schwierigkeit</h3>
@@ -350,6 +379,6 @@
 
   <!-- Physik-Bibliothek (lokal, offline-faehig) + Spiellogik -->
   <script src="matter.min.js"></script>
-  <script src="game.js?v=5"></script>
+  <script src="game.js?v=6"></script>
 </body>
 </html>

@@ -112,6 +112,25 @@
 
   var SPEICHER_SCHLUESSEL = "fietes-formenflipper";
 
+  // Drei austauschbare Themen (im Menue waehlbar): sie aendern NUR das
+  // Aussehen - Bumper-Grafik, Kabinett-Farbe und Hintergrund-Deko. Spielfeld-
+  // Aufbau, Physik und Lerninhalte bleiben fuer alle drei exakt gleich.
+  var THEMEN = {
+    pilz: {
+      name: "Pilz-Arena", icon: "🍄",
+      kabinett: ["#2b4373", "#1d2c54"]
+    },
+    weltraum: {
+      name: "Weltraum", icon: "🚀",
+      kabinett: ["#241a4e", "#0e0a26"]
+    },
+    dino: {
+      name: "Dino-Zeit", icon: "🦕",
+      kabinett: ["#1f3d2e", "#122318"]
+    }
+  };
+  function THEMA() { return THEMEN[state.thema] || THEMEN.pilz; }
+
 
   /* 2. ZUSTAND + DOM-REFERENZEN ------------------------------------------- */
 
@@ -122,6 +141,7 @@
     gesehenSymbole: {},      // welche Buchstaben/Formen in diesem Spiel schon dran waren
     baelle: BAELLE_PRO_RUNDE,// uebrige Kugeln in dieser Runde (Anzeige oben)
     symbole: "mix",          // Einstellung: buchstaben | formen | mix
+    thema: "pilz",           // Einstellung: pilz | weltraum | dino (nur Optik)
     schwierigkeit: "leicht", // Einstellung: leicht | mittel | schnell
     zwischenspiele: true,    // Zwischenspiele zwischen den Kugeln?
     // Rechenaufgabe-Einstellungen (Menue): Zahlenraum + aktive Operationen.
@@ -140,7 +160,7 @@
 
   var el = {};               // DOM-Verweise, werden in init() gefuellt
   [
-    "titelscreen", "mission-schild", "mission-text", "spielfeld",
+    "titelscreen", "titel-icon", "mission-schild", "mission-text", "spielfeld",
     "symbol-blitz", "lob-banner", "zone-links", "zone-rechts",
     "anzeige-punkte", "anzeige-sterne", "anzeige-baelle",
     "stat-punkte", "stat-sterne", "stat-baelle",
@@ -202,10 +222,6 @@
     wandSegment(4, 445, PIVOT_L.x, PIVOT_L.y, 16),      // Einlauf links
     wandSegment(GASSE_X, 448, PIVOT_R.x, PIVOT_R.y, 16),// Einlauf rechts
     wandSegment(GASSE_X, 190, GASSE_X, 508, 8),         // Gassen-Trennwand
-    // Umlenk-Dach am Gassen-Ausgang: schiebt Kugeln nach LINKS ins Feld (die
-    // linke Seite liegt TIEFER, die Kugel rollt also von der Gasse WEG). So
-    // faellt eine zurueckkommende Kugel fast nie mehr in den Einlasskanal.
-    wandSegment(GASSE_X, 172, 300, 200, 9),
     wandSegment(348, 508, 398, 514, 14),                // Gassen-Boden (leicht schraeg -> Kugel rollt an die Wand)
     wandSegment(104, 530, 104, 600, 12),                // Abfluss-Kanal links
     wandSegment(296, 530, 296, 600, 12),                // Abfluss-Kanal rechts
@@ -223,6 +239,29 @@
         cx + r * Math.cos(a2), cy + r * Math.sin(a2), 18));
     }
   })();
+
+  // --- Rueckschlag-Klappe am Gassen-Ausgang: sobald die Kugel oben aus der
+  //     Abschuss-Gasse ins Spielfeld geflogen ist, klappt hier ein kleiner
+  //     Riegel zu (wie ein Rueckschlagventil beim echten Flipper). Vorher
+  //     gab es an dieser Stelle nur ein schraeges Umlenk-Dach, das die Kugel
+  //     manchmal doch wieder in den Schacht zurueckfallen liess - dann
+  //     musste erneut abgeschossen werden, was den Spielfluss stoerte. Die
+  //     Klappe wird dynamisch ein-/ausgebaut (siehe schliesseKlappe/
+  //     oeffneKlappe in Abschnitt 7): offen waehrend die Kugel hochsteigt,
+  //     geschlossen sobald sie im Feld ist - so bleibt der Schacht leer,
+  //     bis die naechste Kugel bereitsteht.
+  var klappeKoerper = wandSegment(GASSE_X - 2, 178, 397, 178, 11);
+  var klappeGeschlossen = false;
+  function schliesseKlappe() {
+    if (klappeGeschlossen) { return; }
+    klappeGeschlossen = true;
+    World.add(engine.world, klappeKoerper);
+  }
+  function oeffneKlappe() {
+    if (!klappeGeschlossen) { return; }
+    klappeGeschlossen = false;
+    World.remove(engine.world, klappeKoerper);
+  }
 
   // --- Fang-Loch: sitzt oben in der Mitte. Die Bumper flankieren es, sodass
   //     ein freier Schussweg nach oben in dieses Loch entsteht (wie beim
@@ -745,6 +784,8 @@
   function neueKugel() {
     if (kugel) { World.remove(engine.world, kugel); }
     wartetAufGassenAustritt = false;
+    klappeSchliessenBereit = false;
+    oeffneKlappe();
     kugel = Bodies.circle(373, 486, KUGEL_RADIUS, {
       label: "kugel",
       restitution: 0.45,
@@ -823,14 +864,29 @@
   // (Trennwand endet bei y=190), gibt es JETZT einen kraeftigen Schubs nach
   // links ins Feld - vorher wuerde der Schubs sie nur gegen die Trennwand
   // drücken und direkt in die Gasse zurueckprallen lassen.
+  var klappeSchliessenBereit = false; // true, sobald die Kugel die Gasse verlassen hat
+
   function pruefeGassenAustritt() {
     if (!wartetAufGassenAustritt || !kugel) { return; }
     if (kugel.position.y < 182) {
       Body.setVelocity(kugel, { x: -4.4, y: kugel.velocity.y });
       wartetAufGassenAustritt = false;
+      klappeSchliessenBereit = true;
     } else if (kugel.position.y > 520 || kugel.velocity.y > -0.5) {
       // wieder unten gelandet oder Schwung verloren, ohne oben rauszukommen
       wartetAufGassenAustritt = false;
+    }
+  }
+
+  // Erst wenn die Kugel einen sicheren Abstand zur Klappe hat (sonst wuerde
+  // sie beim Zuklappen noch mit ihr ueberlappen und komisch abprallen), wird
+  // die Klappe tatsaechlich geschlossen - danach kommt niemand mehr zurueck
+  // in den Schacht, bis die naechste Kugel geladen ist.
+  function pruefeKlappeSchliessen() {
+    if (!klappeSchliessenBereit || !kugel) { return; }
+    if (kugel.position.y < 155) {
+      schliesseKlappe();
+      klappeSchliessenBereit = false;
     }
   }
   el.buttonAbschuss.addEventListener("pointerdown", starteLaden);
@@ -1084,8 +1140,8 @@
     ctx.lineTo(400, FELD_H);
     ctx.closePath();
     var kab = ctx.createLinearGradient(0, 0, 0, FELD_H);
-    kab.addColorStop(0, "#2b4373");
-    kab.addColorStop(1, "#1d2c54");
+    kab.addColorStop(0, THEMA().kabinett[0]);
+    kab.addColorStop(1, THEMA().kabinett[1]);
     ctx.fillStyle = kab;
     ctx.fill();
 
@@ -1107,19 +1163,11 @@
     ctx.strokeStyle = "#f3c44a";
     ctx.stroke();
 
-    // 3) Dezente Wiesen-Deko: Huegel + Bluemchen (Platzhalter fuer eigenes
-    //    Hintergrundbild - hier einfach drawImage() einsetzen). Etwas
-    //    kraeftigere Farben + mehr Bluemchen, damit das Feld weniger leer
-    //    und bunter wirkt.
-    ctx.fillStyle = "rgba(40, 192, 138, 0.11)";
-    ctx.beginPath(); ctx.ellipse(90, 470, 120, 46, 0, Math.PI, 0); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(300, 480, 130, 52, 0, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = "rgba(47, 111, 214, 0.07)";
-    ctx.beginPath(); ctx.arc(200, 210, 92, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(243, 196, 74, 0.08)";
-    ctx.beginPath(); ctx.ellipse(200, 340, 140, 40, 0, 0, Math.PI * 2); ctx.fill();
-    [[70, 130], [330, 140], [160, 400], [240, 388], [110, 330], [290, 330]]
-      .forEach(function (b, i) { zeichneBluemchen(b[0], b[1], KONFETTI_FARBEN[i % KONFETTI_FARBEN.length]); });
+    // 3) Dezente Hintergrund-Deko (Platzhalter fuer eigenes Hintergrundbild -
+    //    hier einfach drawImage() einsetzen). Je nach Thema Wiese, Sternenfeld
+    //    oder Dschungel - nur die Optik aendert sich, das Spielfeld darunter
+    //    bleibt fuer alle drei Themen identisch.
+    zeichneDekor();
 
     // 4) Rampen unten (Teil des Rahmens): fuehren zur Flipper-Ebene
     ctx.fillStyle = "#26375f";
@@ -1163,21 +1211,133 @@
     ctx.fill();
   }
 
-  // --- Abschuss-Gasse rechts: Trennwand, Umlenk-Dach, Kraftanzeige, Feder
+  // --- Hintergrund-Deko je Thema: reine Optik, das Spielfeld darunter (Wand-
+  //     Koerper, Bumper-Positionen, Rampen) ist fuer alle drei identisch.
+  function zeichneDekor() {
+    if (state.thema === "weltraum") { zeichneDekorWeltraum(); }
+    else if (state.thema === "dino") { zeichneDekorDino(); }
+    else { zeichneDekorPilz(); }
+  }
+
+  // Wiese mit Huegeln + Bluemchen (Standard-Thema)
+  function zeichneDekorPilz() {
+    ctx.fillStyle = "rgba(40, 192, 138, 0.11)";
+    ctx.beginPath(); ctx.ellipse(90, 470, 120, 46, 0, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(300, 480, 130, 52, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "rgba(47, 111, 214, 0.07)";
+    ctx.beginPath(); ctx.arc(200, 210, 92, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(243, 196, 74, 0.08)";
+    ctx.beginPath(); ctx.ellipse(200, 340, 140, 40, 0, 0, Math.PI * 2); ctx.fill();
+    [[70, 130], [330, 140], [160, 400], [240, 388], [110, 330], [290, 330]]
+      .forEach(function (b, i) { zeichneBluemchen(b[0], b[1], KONFETTI_FARBEN[i % KONFETTI_FARBEN.length]); });
+  }
+
+  // Sternenfeld mit fernen Planeten (Weltraum-Thema)
+  function zeichneDekorWeltraum() {
+    ctx.fillStyle = "rgba(154, 123, 208, 0.10)";
+    ctx.beginPath(); ctx.ellipse(90, 470, 120, 46, 0, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(300, 480, 130, 52, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "rgba(90, 140, 255, 0.08)";
+    ctx.beginPath(); ctx.arc(200, 210, 92, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.beginPath(); ctx.ellipse(200, 340, 140, 40, 0, 0, Math.PI * 2); ctx.fill();
+    // ferne kleine Planeten statt Bluemchen
+    [[70, 130, "#9a7bd0"], [330, 140, "#2f6fd6"], [160, 400, "#ff9e2c"],
+     [240, 388, "#28c08a"], [110, 330, "#d9453e"], [290, 330, "#f3c44a"]]
+      .forEach(function (p) { zeichneFernerPlanet(p[0], p[1], p[2]); });
+    // Sternenstaub darueber verteilt
+    var sterne = [[40, 200], [360, 260], [200, 420], [60, 380], [340, 420],
+                  [130, 240], [270, 200], [30, 460], [370, 460], [200, 260]];
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    sterne.forEach(function (s, i) {
+      var puls = 0.5 + 0.5 * Math.sin(performance.now() / 400 + i);
+      ctx.globalAlpha = 0.3 + puls * 0.4;
+      ctx.beginPath();
+      ctx.arc(s[0], s[1], 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  function zeichneFernerPlanet(x, y, farbe) {
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+    ctx.fillStyle = mischeFarbe(farbe, "#ffffff", 0.2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(x - 2, y - 2, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.fill();
+  }
+
+  // Dschungel mit Farnen + fernem Vulkan (Dino-Thema)
+  function zeichneDekorDino() {
+    ctx.fillStyle = "rgba(92, 138, 74, 0.14)";
+    ctx.beginPath(); ctx.ellipse(90, 470, 120, 46, 0, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(300, 480, 130, 52, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "rgba(139, 111, 58, 0.08)";
+    ctx.beginPath(); ctx.arc(200, 210, 92, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(92, 138, 74, 0.09)";
+    ctx.beginPath(); ctx.ellipse(200, 340, 140, 40, 0, 0, Math.PI * 2); ctx.fill();
+    [[70, 130], [330, 140], [160, 400], [240, 388], [110, 330], [290, 330]]
+      .forEach(function (b) { zeichneFarn(b[0], b[1]); });
+  }
+
+  function zeichneFarn(x, y) {
+    ctx.strokeStyle = "rgba(58, 110, 58, 0.55)";
+    ctx.lineWidth = 2;
+    [-0.5, -0.2, 0.2, 0.5].forEach(function (spreiz) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + spreiz * 18, y - 14, x + spreiz * 24, y - 24);
+      ctx.stroke();
+    });
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(139, 111, 58, 0.4)";
+    ctx.fill();
+  }
+
+  // --- Abschuss-Gasse rechts: Trennwand, Rueckschlag-Klappe, Kraftanzeige, Feder
+  var klappeAnim = 0; // 0 = offen/hochgeklappt, 1 = zu - sanft animiert (s.u.)
+
   function zeichneGasse() {
-    // Trennwand mit runder Kappe + Umlenk-Dach (nach links ins Feld)
+    // Trennwand mit runder Kappe
     ctx.lineCap = "round";
     ctx.strokeStyle = "#26375f";
     ctx.lineWidth = 8;
     ctx.beginPath();
-    ctx.moveTo(GASSE_X, 508); ctx.lineTo(GASSE_X, 190);
-    ctx.lineTo(GASSE_X, 172); ctx.lineTo(300, 200);
+    ctx.moveTo(GASSE_X, 508); ctx.lineTo(GASSE_X, 178);
     ctx.stroke();
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#f3c44a";
     ctx.beginPath();
     ctx.moveTo(GASSE_X - 4, 505); ctx.lineTo(GASSE_X - 4, 192);
     ctx.stroke();
+
+    // Rueckschlag-Klappe: schwingt am Gassen-Ausgang zu, sobald die Kugel
+    // im Feld ist (schliesseKlappe/oeffneKlappe, Abschnitt 7/3) - und
+    // schwenkt wieder hoch, sobald die naechste Kugel bereitsteht.
+    var klappeZiel = klappeGeschlossen ? 1 : 0;
+    klappeAnim += (klappeZiel - klappeAnim) * 0.22;
+    var hingeX = GASSE_X - 2, hingeY = 178, klappeLaenge = 46;
+    var klappeWinkel = -1.35 * (1 - klappeAnim);
+    ctx.save();
+    ctx.translate(hingeX, hingeY);
+    ctx.rotate(klappeWinkel);
+    ctx.lineCap = "round";
+    ctx.strokeStyle = klappeAnim > 0.5 ? "#d9453e" : "#8a97b8";
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(klappeLaenge, 0);
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(hingeX, hingeY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "#26375f";
+    ctx.fill();
 
     // Kraftanzeige (Plunger): fuellt sich, solange der Knopf gehalten wird
     var stand = ladeStand();
@@ -1430,8 +1590,9 @@
     ctx.lineWidth = 1.4; ctx.strokeStyle = mischeFarbe(farbe, "#000000", 0.3); ctx.stroke();
   }
 
-  // --- Pilz-Bumper: schattierter roter Hut mit Glanzlicht und Tupfen,
-  //     Symbol auf einem weissen Schild in der Mitte
+  // --- Bumper: Schlagschatten + Schild sind fuer alle Themen gleich, nur
+  //     die "Kappe" dazwischen wechselt (Pilzhut / Planet / Dino-Ei) - siehe
+  //     zeichneDekor() weiter oben fuer dasselbe Prinzip beim Hintergrund.
   function zeichneBumper(e) {
     var blitz = blitzWert(e.blitzZeit);
     var r = e.r + blitz * 5;                // ploppt beim Treffer kurz auf
@@ -1446,6 +1607,23 @@
     ctx.fillStyle = "rgba(30, 44, 82, 0.16)";
     ctx.fill();
 
+    if (state.thema === "weltraum") { zeichneBumperWeltraum(e, r, blitz); }
+    else if (state.thema === "dino") { zeichneBumperDino(e, r, blitz); }
+    else { zeichneBumperPilz(e, r, blitz); }
+
+    // weisses Schild in der Mitte mit Goldrand + Symbol
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, r * 0.66, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "#f3c44a";
+    ctx.stroke();
+    zeichneSymbol(e.symbol, e.x, e.y, r * 0.74);
+  }
+
+  // Pilz-Bumper: schattierter roter Hut mit Glanzlicht und Tupfen
+  function zeichneBumperPilz(e, r, blitz) {
     // Stiel mit leichtem Verlauf
     var stiel = ctx.createLinearGradient(e.x - r * 0.4, 0, e.x + r * 0.4, 0);
     stiel.addColorStop(0, "#efdcba");
@@ -1487,16 +1665,105 @@
       ctx.arc(e.x + t[0] * r, e.y + t[1] * r, t[2] * r, 0, Math.PI * 2);
       ctx.fill();
     });
+  }
 
-    // weisses Schild in der Mitte mit Goldrand + Symbol
+  // Weltraum-Bumper: leuchtender Planet mit Ring und funkelnden Sternen
+  function zeichneBumperWeltraum(e, r, blitz) {
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    [[-0.9, -0.7, 1.6], [0.85, -0.85, 1.3], [-0.75, 0.85, 1.2], [0.95, 0.55, 1.4]]
+      .forEach(function (t) {
+        ctx.beginPath();
+        ctx.arc(e.x + t[0] * r, e.y + t[1] * r, t[2], 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+    var kugel = ctx.createRadialGradient(e.x - r * 0.35, e.y - r * 0.4, r * 0.15,
+                                          e.x, e.y, r);
+    if (blitz > 0) {
+      kugel.addColorStop(0, "#bfe0ff"); kugel.addColorStop(1, "#3f7fe0");
+    } else {
+      kugel.addColorStop(0, "#7fb2f2"); kugel.addColorStop(1, "#2547a0");
+    }
     ctx.beginPath();
-    ctx.arc(e.x, e.y, r * 0.66, 0, Math.PI * 2);
-    ctx.fillStyle = "#ffffff";
+    ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = kugel;
     ctx.fill();
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = "#f3c44a";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#1b2f66";
     ctx.stroke();
-    zeichneSymbol(e.symbol, e.x, e.y, r * 0.74);
+
+    // Glanzbogen oben links
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, r * 0.78, Math.PI * 1.05, Math.PI * 1.45);
+    ctx.lineWidth = r * 0.14;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.stroke();
+
+    // Krater statt Pilz-Tupfen
+    ctx.fillStyle = "rgba(20, 40, 90, 0.35)";
+    [[-0.5, -0.3, 0.14], [0.45, -0.5, 0.11], [0.15, 0.55, 0.13]].forEach(function (t) {
+      ctx.beginPath();
+      ctx.arc(e.x + t[0] * r, e.y + t[1] * r, t[2] * r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Saturn-Ring vor der Kugel
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(-0.35);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.35, r * 0.4, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = blitz > 0 ? "rgba(255, 224, 168, 0.85)" : "rgba(154, 196, 255, 0.7)";
+    ctx.lineWidth = r * 0.15;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Dino-Bumper: gesprenkeltes Ei mit Grasbueschel statt Pilzstiel
+  function zeichneBumperDino(e, r, blitz) {
+    ctx.fillStyle = "#5c8a4a";
+    [[-0.55, 0.72], [0.5, 0.76], [0, 0.82]].forEach(function (p) {
+      var bx = e.x + p[0] * r, by = e.y + p[1] * r;
+      ctx.beginPath();
+      ctx.moveTo(bx, by + 8);
+      ctx.lineTo(bx - 5, by - 9);
+      ctx.lineTo(bx + 5, by - 9);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    var ei = ctx.createRadialGradient(e.x - r * 0.35, e.y - r * 0.4, r * 0.15,
+                                       e.x, e.y, r);
+    if (blitz > 0) {
+      ei.addColorStop(0, "#eee2ae"); ei.addColorStop(1, "#b7a35e");
+    } else {
+      ei.addColorStop(0, "#ddcf8f"); ei.addColorStop(1, "#8f7a3f");
+    }
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y, r * 0.92, r * 1.02, 0, 0, Math.PI * 2);
+    ctx.fillStyle = ei;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#6b5a2c";
+    ctx.stroke();
+
+    // Glanzbogen oben links
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, r * 0.78, Math.PI * 1.05, Math.PI * 1.45);
+    ctx.lineWidth = r * 0.14;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(255,255,255,0.45)";
+    ctx.stroke();
+
+    // Sprenkel statt Pilz-Tupfen
+    ctx.fillStyle = "rgba(107, 90, 44, 0.55)";
+    [[-0.5, -0.35, 0.13], [0.5, -0.15, 0.10], [0.15, 0.5, 0.12], [-0.2, 0.2, 0.09]]
+      .forEach(function (t) {
+        ctx.beginPath();
+        ctx.arc(e.x + t[0] * r, e.y + t[1] * r, t[2] * r, 0, Math.PI * 2);
+        ctx.fill();
+      });
   }
 
   // --- Tor: goldgerahmtes Tuerchen mit sanftem Verlauf und Symbol
@@ -1708,6 +1975,7 @@
     begrenzeTempo();
     pruefeGasse();
     pruefeGassenAustritt();
+    pruefeKlappeSchliessen();
     pruefeStillstand();
     pruefeEingeklemmt();
     pruefeKugelVerlust();
@@ -2100,6 +2368,11 @@
 
   /* 11. UI: TITELSCREEN, MENUE, POPOVER, KONFETTI, SPEICHER ----------------- */
 
+  // --- Titelscreen-Icon passend zum gewaehlten Thema (Pilz/Weltraum/Dino)
+  function aktualisiereTitelThema() {
+    el.titelIcon.textContent = THEMA().icon;
+  }
+
   // --- Titelscreen: erster Tipp startet Spiel + Audio-Freigabe
   el.titelscreen.addEventListener("click", function () {
     if (state.laeuft) { return; }
@@ -2144,12 +2417,12 @@
   }
   el.buttonAbout.addEventListener("click", function () {
     zeigePopover(
-      '<span class="about-titel">🐸 Fietes Formenflipper</span>' +
-      '<span class="about-unter">Die Pilz-Arena</span>' +
+      '<span class="about-titel">🐸 Fietes Flipper</span>' +
+      '<span class="about-unter">Buchstaben, Formen &amp; Zahlen</span>' +
       '<span class="about-studio">ein Spiel von JONFIE STUDIOS</span>', el.buttonAbout);
   });
   el.statPunkte.addEventListener("click", function () {
-    zeigePopover("🔵 Deine <b>Punkte</b>: Jeder Pilz und jedes Tor gibt Punkte!" +
+    zeigePopover("🔵 Deine <b>Punkte</b>: Jeder Bumper und jedes Tor gibt Punkte!" +
       "<br>🏆 Top 5: " + top5Html("punkte", "🔵"), el.statPunkte);
   });
   el.statSterne.addEventListener("click", function () {
@@ -2166,6 +2439,7 @@
       var s = karte.dataset.setting, w = karte.dataset.wert;
       var aktiv =
         (s === "symbole" && state.symbole === w) ||
+        (s === "thema" && state.thema === w) ||
         (s === "schwierigkeit" && state.schwierigkeit === w) ||
         (s === "zwischen" && state.zwischenspiele === (w === "an")) ||
         (s === "zahlenraum" && state.rechnen.zahlenraum === parseInt(w, 10)) ||
@@ -2184,6 +2458,10 @@
         state.mission = null;                // alte Mission passt nicht mehr
         el.missionText.textContent = "Los geht’s!";
         planeMission(4000);
+      }
+      if (s === "thema" && THEMEN[w]) {
+        state.thema = w;
+        aktualisiereTitelThema();            // Titelscreen-Icon passend umschalten
       }
       if (s === "schwierigkeit" && SCHWIERIGKEITEN[w]) {
         state.schwierigkeit = w;
@@ -2254,7 +2532,7 @@
   function speichereStand() {
     try {
       window.localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify({
-        symbole: state.symbole,
+        symbole: state.symbole, thema: state.thema,
         schwierigkeit: state.schwierigkeit, zwischenspiele: state.zwischenspiele,
         rechnen: state.rechnen, toene: state.toene, sprache: state.sprache
       }));
@@ -2266,6 +2544,7 @@
       if (!roh) { return; }
       var d = JSON.parse(roh);
       if (typeof d.symbole === "string") { state.symbole = d.symbole; }
+      if (THEMEN[d.thema]) { state.thema = d.thema; }
       if (SCHWIERIGKEITEN[d.schwierigkeit]) { state.schwierigkeit = d.schwierigkeit; }
       // Zwischenspiele (neuer Schluessel, aber alten "spiegel" noch respektieren)
       if (typeof d.zwischenspiele === "boolean") { state.zwischenspiele = d.zwischenspiele; }
@@ -2321,6 +2600,7 @@
   // --- Los geht's
   ladeGespeichertenStand();
   ladeBestenliste();
+  aktualisiereTitelThema();
   wendeSchwierigkeitAn();
   el.anzeigeBaelle.textContent = state.baelle;
   passeCanvasAn();

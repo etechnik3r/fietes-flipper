@@ -783,8 +783,10 @@ body {
 
 
 /* 10) TITELSCREEN -------------------------------------------------------------
-   Wertiger Vollbild-Auftakt (dunkles Blau + Gold), identische Anmutung wie
-   beim Uhrzeit-Uhu. Ein Tipp irgendwohin startet das Spiel. */
+   Wertiger Vollbild-Auftakt im Stil eines echten Flipper-Backglass: dunkles
+   Blau, Goldrahmen, sanfter Glanz-Schwenk ueber die Marquee-Karte. Ein Tipp
+   irgendwohin startet das Spiel. Das Icon oben ist das aktuell gewaehlte
+   Thema (Pilz/Weltraum/Dino, siehe game.js aktualisiereTitelThema()). */
 .titelscreen {
   position: fixed;
   inset: 0;
@@ -801,30 +803,75 @@ body {
     linear-gradient(180deg, #24365f 0%, var(--card-2) 55%, #131f3e 100%);
   cursor: pointer;
   transition: opacity 0.45s ease;
+  overflow: hidden;
 }
 .titelscreen.aus { opacity: 0; pointer-events: none; }
 .titelscreen[hidden] { display: none; }
-.titel-frosch {
-  font-size: clamp(4.5rem, 24vw, 7.5rem);
+
+/* Ferne funkelnde Sterne im Hintergrund - rein dekorativ */
+.titel-funke {
+  position: absolute;
+  color: var(--gold);
+  opacity: 0.5;
+  animation: titel-funkeln 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+.titel-funke-1 { top: 14%;  left: 12%; font-size: 1.1rem; animation-delay: 0s; }
+.titel-funke-2 { top: 22%;  right: 10%; font-size: 0.8rem; animation-delay: 0.9s; }
+.titel-funke-3 { bottom: 26%; left: 18%; font-size: 0.7rem; animation-delay: 1.6s; }
+
+/* Marquee-Karte: die eigentliche "Backglass"-Plakette mit Goldrahmen */
+.titel-rahmen {
+  position: relative;
+  width: min(88vw, 420px);
+  padding: clamp(28px, 6vw, 44px) clamp(20px, 5vw, 32px) clamp(24px, 5vw, 34px);
+  border-radius: 32px;
+  border: 3px solid var(--gold);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0) 40%),
+    linear-gradient(200deg, rgba(36, 54, 98, 0.85), rgba(19, 31, 62, 0.9));
+  box-shadow:
+    0 0 0 6px rgba(243, 196, 74, 0.16),
+    0 22px 50px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+.titel-rahmen-glanz {
+  position: absolute;
+  inset: -60% -20%;
+  background: linear-gradient(115deg,
+    transparent 30%, rgba(255, 255, 255, 0.22) 48%, transparent 62%);
+  transform: translateX(-60%);
+  animation: titel-glanz-schwenk 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.titel-icon {
+  display: block;
+  font-size: clamp(3.8rem, 20vw, 6rem);
   line-height: 1.1;
   filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.35));
   animation: titel-schweben 3.4s ease-in-out infinite;
 }
 .titel-name {
   font-family: var(--font-display);
-  font-size: clamp(2.1rem, 10.5vw, 4rem);
+  font-size: clamp(2rem, 9.5vw, 3.4rem);
   font-weight: 800;
   color: var(--gold);
   letter-spacing: 1px;
   line-height: 1.1;
-  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  margin-top: 6px;
+  text-shadow:
+    0 1px 0 #fff8e2,
+    0 3px 0 rgba(178, 122, 24, 0.6),
+    0 6px 16px rgba(0, 0, 0, 0.4);
 }
 .titel-unter {
   font-family: var(--font-display);
-  font-size: clamp(1.05rem, 4.8vw, 1.5rem);
+  font-size: clamp(0.95rem, 4.3vw, 1.25rem);
   font-weight: 700;
-  letter-spacing: 2.5px;
+  letter-spacing: 1.5px;
   color: #aebce6;
+  margin-top: 4px;
 }
 .titel-symbole {
   margin-top: 14px;
@@ -833,11 +880,15 @@ body {
   opacity: 0.9;
 }
 .titel-tipp {
-  margin-top: 26px;
+  margin-top: 22px;
   font-family: var(--font-display);
-  font-size: clamp(1.05rem, 4.6vw, 1.35rem);
+  font-size: clamp(1rem, 4.4vw, 1.25rem);
   font-weight: 700;
   color: #ffe6a8;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(243, 196, 74, 0.12);
+  border: 1.5px solid rgba(243, 196, 74, 0.45);
   animation: titel-pulsieren 1.7s ease-in-out infinite;
 }
 .titel-studio {
@@ -857,6 +908,14 @@ body {
 @keyframes titel-pulsieren {
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 1; }
+}
+@keyframes titel-glanz-schwenk {
+  0%, 15%  { transform: translateX(-60%); }
+  55%, 100% { transform: translateX(60%); }
+}
+@keyframes titel-funkeln {
+  0%, 100% { opacity: 0.15; transform: scale(0.8); }
+  50%      { opacity: 0.8;  transform: scale(1.15); }
 }
 
 
@@ -892,7 +951,8 @@ body {
 @media (pointer: coarse) { :root { --tap-min: 64px; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .konfetti, .titel-frosch, .titel-tipp, .mission-schild.neu,
+  .konfetti, .titel-icon, .titel-tipp, .titel-rahmen-glanz, .titel-funke,
+  .mission-schild.neu,
   .mission-schild.geschafft, .symbol-blitz.zeigt, .lob-banner.zeigt,
   .stat.plopp, .abschuss-button, .runde-karte {
     animation: none !important;
