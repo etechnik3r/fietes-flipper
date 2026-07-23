@@ -52,7 +52,7 @@
   <!-- PWA: installierbar + offline (siehe manifest.webmanifest / sw.js).
        Schriften liegen lokal in fonts/ (kein CDN noetig). -->
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
 </head>
 
@@ -61,17 +61,33 @@
   <!-- 0) TITELSCREEN: erscheint beim Laden, ein Tipp irgendwohin startet das
        Spiel (und schaltet gleichzeitig Audio frei - Browser verlangen dafuer
        eine Nutzer-Geste). -->
-  <div class="titelscreen" id="titelscreen" role="button" aria-label="Tippe, um das Spiel zu starten">
+  <div class="titelscreen" id="titelscreen">
     <span class="titel-funke titel-funke-1" aria-hidden="true">✦</span>
     <span class="titel-funke titel-funke-2" aria-hidden="true">✦</span>
     <span class="titel-funke titel-funke-3" aria-hidden="true">✦</span>
+    <span class="titel-funke titel-funke-4" aria-hidden="true">✦</span>
+    <span class="titel-funke titel-funke-5" aria-hidden="true">✦</span>
     <div class="titel-rahmen">
       <span class="titel-rahmen-glanz" aria-hidden="true"></span>
+      <span class="titel-ball" aria-hidden="true"></span>
       <span class="titel-icon" id="titel-icon" aria-hidden="true">🍄</span>
       <h1 class="titel-name">Fietes Flipper</h1>
       <p class="titel-unter">Buchstaben, Formen &amp; Zahlen</p>
-      <p class="titel-symbole" aria-hidden="true">🔤 ⭐ 🔺 🟦</p>
-      <p class="titel-tipp">👆 Tippe, um zu starten</p>
+      <div class="titel-chips" aria-hidden="true">
+        <span class="titel-chip">A</span>
+        <span class="titel-chip chip-kreis"></span>
+        <span class="titel-chip chip-dreieck"></span>
+        <span class="titel-chip">7</span>
+        <span class="titel-chip chip-stern">★</span>
+      </div>
+      <div class="titel-knoepfe">
+        <button type="button" class="titel-start" id="button-start-spiel" aria-label="Spiel starten">
+          <span class="titel-start-icon" aria-hidden="true">▶</span> Spiel starten
+        </button>
+        <button type="button" class="titel-optionen" id="button-titel-einstellungen" aria-label="Einstellungen öffnen">
+          ⚙️ Einstellungen
+        </button>
+      </div>
     </div>
     <p class="titel-studio">ein Spiel von JONFIE STUDIOS</p>
   </div>
@@ -213,15 +229,12 @@
           <div class="opt-reihe">
             <button type="button" class="opt-karte" data-setting="symbole" data-wert="buchstaben">
               <span class="opt-icon">🅰️</span><span class="opt-name">Buchstaben</span>
-              <span class="opt-text">A bis Z</span>
             </button>
             <button type="button" class="opt-karte" data-setting="symbole" data-wert="formen">
               <span class="opt-icon">🔷</span><span class="opt-name">Formen</span>
-              <span class="opt-text">Kreis, Dreieck …</span>
             </button>
             <button type="button" class="opt-karte" data-setting="symbole" data-wert="mix">
               <span class="opt-icon">🔀</span><span class="opt-name">Mix</span>
-              <span class="opt-text">bunt gemischt</span>
             </button>
           </div>
         </section>
@@ -231,50 +244,44 @@
           <h3 class="opt-titel">🎨 Thema</h3>
           <div class="opt-reihe">
             <button type="button" class="opt-karte" data-setting="thema" data-wert="pilz">
-              <span class="opt-icon">🍄</span><span class="opt-name">Pilz-Arena</span>
-              <span class="opt-text">Wiese &amp; Pilze</span>
+              <span class="opt-icon">🍄</span><span class="opt-name">Pilze</span>
             </button>
             <button type="button" class="opt-karte" data-setting="thema" data-wert="weltraum">
               <span class="opt-icon">🚀</span><span class="opt-name">Weltraum</span>
-              <span class="opt-text">Planeten &amp; Sterne</span>
             </button>
             <button type="button" class="opt-karte" data-setting="thema" data-wert="dino">
-              <span class="opt-icon">🦕</span><span class="opt-name">Dino-Zeit</span>
-              <span class="opt-text">Dschungel &amp; Eier</span>
+              <span class="opt-icon">🦕</span><span class="opt-name">Dinos</span>
             </button>
           </div>
         </section>
 
         <!-- Schwierigkeit: steuert nur das Kugeltempo -->
         <section class="opt-gruppe">
-          <h3 class="opt-titel">🎚️ Schwierigkeit</h3>
+          <h3 class="opt-titel">🎚️ Tempo</h3>
           <div class="opt-reihe">
             <button type="button" class="opt-karte" data-setting="schwierigkeit" data-wert="leicht">
               <span class="opt-icon">🐢</span><span class="opt-name">Leicht</span>
-              <span class="opt-text">gemütliche Kugel</span>
             </button>
             <button type="button" class="opt-karte" data-setting="schwierigkeit" data-wert="mittel">
               <span class="opt-icon">🐇</span><span class="opt-name">Mittel</span>
-              <span class="opt-text">flottes Tempo</span>
             </button>
             <button type="button" class="opt-karte" data-setting="schwierigkeit" data-wert="schnell">
               <span class="opt-icon">🚀</span><span class="opt-name">Schnell</span>
-              <span class="opt-text">für Profis</span>
             </button>
           </div>
         </section>
 
-        <!-- Zwischenspiele an/aus (Zeichnen + Rechnen abwechselnd) -->
+        <!-- Zwischenspiele: Rechnen und Zeichnen EINZELN an-/abschaltbar -->
         <section class="opt-gruppe">
-          <h3 class="opt-titel">🎲 Zwischenspiele</h3>
+          <h3 class="opt-titel">🎲 Aufgaben zwischen den Kugeln</h3>
           <div class="opt-reihe opt-reihe-zwei">
-            <button type="button" class="opt-karte" data-setting="zwischen" data-wert="an">
-              <span class="opt-icon">✏️</span><span class="opt-name">An</span>
-              <span class="opt-text">Zeichnen &amp; Rechnen</span>
+            <button type="button" class="opt-karte opt-schalter" data-setting="zwischen" data-wert="rechnen">
+              <span class="opt-icon">🧮</span><span class="opt-name">Rechnen</span>
+              <span class="opt-schalter-status" aria-hidden="true"></span>
             </button>
-            <button type="button" class="opt-karte" data-setting="zwischen" data-wert="aus">
-              <span class="opt-icon">⚡</span><span class="opt-name">Aus</span>
-              <span class="opt-text">sofort weiterflippern</span>
+            <button type="button" class="opt-karte opt-schalter" data-setting="zwischen" data-wert="zeichnen">
+              <span class="opt-icon">✏️</span><span class="opt-name">Zeichnen</span>
+              <span class="opt-schalter-status" aria-hidden="true"></span>
             </button>
           </div>
         </section>
@@ -285,15 +292,12 @@
           <div class="opt-reihe">
             <button type="button" class="opt-karte" data-setting="zahlenraum" data-wert="10">
               <span class="opt-icon">🔟</span><span class="opt-name">bis 10</span>
-              <span class="opt-text">für den Anfang</span>
             </button>
             <button type="button" class="opt-karte" data-setting="zahlenraum" data-wert="20">
               <span class="opt-icon">2️⃣</span><span class="opt-name">bis 20</span>
-              <span class="opt-text">etwas größer</span>
             </button>
             <button type="button" class="opt-karte" data-setting="zahlenraum" data-wert="100">
               <span class="opt-icon">💯</span><span class="opt-name">bis 100</span>
-              <span class="opt-text">für Profis</span>
             </button>
           </div>
         </section>
@@ -301,56 +305,48 @@
         <!-- Rechenaufgabe: Operationen (Mehrfachauswahl) -->
         <section class="opt-gruppe">
           <h3 class="opt-titel">➕ Rechenarten <span class="opt-untertitel">(mehrere möglich)</span></h3>
-          <div class="opt-reihe">
+          <div class="opt-reihe opt-reihe-vier">
             <button type="button" class="opt-karte" data-setting="rechenop" data-wert="plus">
               <span class="opt-icon">➕</span><span class="opt-name">Plus</span>
-              <span class="opt-text">zusammenzählen</span>
             </button>
             <button type="button" class="opt-karte" data-setting="rechenop" data-wert="minus">
               <span class="opt-icon">➖</span><span class="opt-name">Minus</span>
-              <span class="opt-text">abziehen</span>
             </button>
-          </div>
-          <div class="opt-reihe" style="margin-top:10px;">
             <button type="button" class="opt-karte" data-setting="rechenop" data-wert="mal">
               <span class="opt-icon">✖️</span><span class="opt-name">Mal</span>
-              <span class="opt-text">kleines Einmaleins</span>
             </button>
             <button type="button" class="opt-karte" data-setting="rechenop" data-wert="geteilt">
               <span class="opt-icon">➗</span><span class="opt-name">Geteilt</span>
-              <span class="opt-text">kleines Einmaleins</span>
             </button>
           </div>
         </section>
 
-        <!-- Ton -->
+        <!-- Ton + Sprache nebeneinander -->
         <section class="opt-gruppe">
-          <h3 class="opt-titel">🔔 Soundeffekte</h3>
-          <div class="opt-reihe opt-reihe-zwei">
+          <h3 class="opt-titel">🔔 Ton &amp; Sprache</h3>
+          <div class="opt-reihe opt-reihe-vier">
             <button type="button" class="opt-karte" data-setting="toene" data-wert="an">
-              <span class="opt-icon">🔔</span><span class="opt-name">An</span>
-              <span class="opt-text">Klänge beim Treffen</span>
+              <span class="opt-icon">🔔</span><span class="opt-name">Ton an</span>
             </button>
             <button type="button" class="opt-karte" data-setting="toene" data-wert="aus">
-              <span class="opt-icon">🔕</span><span class="opt-name">Aus</span>
-              <span class="opt-text">ganz leise</span>
+              <span class="opt-icon">🔕</span><span class="opt-name">Ton aus</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="sprache" data-wert="an">
+              <span class="opt-icon">🗣️</span><span class="opt-name">Vorlesen</span>
+            </button>
+            <button type="button" class="opt-karte" data-setting="sprache" data-wert="aus">
+              <span class="opt-icon">🤫</span><span class="opt-name">Still</span>
             </button>
           </div>
         </section>
 
-        <!-- Sprachausgabe -->
+        <!-- App installieren (PWA) -->
         <section class="opt-gruppe">
-          <h3 class="opt-titel">🗣️ Sprachausgabe</h3>
-          <div class="opt-reihe opt-reihe-zwei">
-            <button type="button" class="opt-karte" data-setting="sprache" data-wert="an">
-              <span class="opt-icon">🗣️</span><span class="opt-name">An</span>
-              <span class="opt-text">Symbole werden vorgelesen</span>
-            </button>
-            <button type="button" class="opt-karte" data-setting="sprache" data-wert="aus">
-              <span class="opt-icon">🤫</span><span class="opt-name">Aus</span>
-              <span class="opt-text">ohne Vorlesen</span>
-            </button>
-          </div>
+          <h3 class="opt-titel">📲 Als App installieren</h3>
+          <button type="button" class="install-button" id="button-install" hidden>
+            📲 App installieren
+          </button>
+          <p class="install-hinweis" id="install-hinweis" hidden></p>
         </section>
 
         <!-- Fortschritt zuruecksetzen -->
@@ -381,6 +377,6 @@
 
   <!-- Physik-Bibliothek (lokal, offline-faehig) + Spiellogik -->
   <script src="matter.min.js"></script>
-  <script src="game.js?v=7"></script>
+  <script src="game.js?v=8"></script>
 </body>
 </html>

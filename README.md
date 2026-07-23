@@ -15,7 +15,9 @@ wieder, und Punkte gehen nie verloren.
 
 ## 🕹️ So wird gespielt
 
-- Am Anfang erscheint ein Titelbild – **einmal tippen** startet das Spiel.
+- Am Anfang erscheint ein Titelbild mit zwei Knöpfen: **▶ Spiel starten**
+  legt sofort los, **⚙️ Einstellungen** öffnet die Optionen schon vor dem
+  ersten Spiel.
 - Jede Kugel wartet rechts in der **Abschuss-Gasse**. Den großen roten
   **🚀-Knopf gedrückt halten** lädt Kraft auf (die Anzeige in der Gasse
   füllt sich) – **je länger, desto weiter** fliegt die Kugel. Kurz getippt
@@ -63,7 +65,9 @@ Knopf gibt es bewusst **nicht**: die Aufgabe wird wirklich gelöst.
   (Plus, Minus, Mal, Geteilt – **Mehrfachauswahl**). Mal und Geteilt bleiben
   im **kleinen Einmaleins**.
 
-Wer mag, schaltet die Zwischenspiele im Menü aus und flippert sofort weiter.
+**Rechnen und Zeichnen lassen sich einzeln an- und abschalten** – so kann man
+z. B. nur Rechenaufgaben behalten und das Nachzeichnen weglassen (oder
+umgekehrt). Sind beide aus, geht es ohne Zwischenspiel sofort weiter.
 
 ## 🔘 Die Knöpfe im Überblick
 
@@ -71,7 +75,7 @@ Wer mag, schaltet die Zwischenspiele im Menü aus und flippert sofort weiter.
 |---|---|
 | 🐸 (oben links) | Infos über das Spiel |
 | 🎱 / 🔵 / ⭐ | Übrige Kugeln, Punkte und Missions-Sterne – antippen erklärt sie |
-| ⚙️ | Menü: Buchstaben/Formen/Mix, Schwierigkeit, Zwischenspiele, Zahlenraum, Rechenarten, Töne, Sprachausgabe |
+| ⚙️ | Menü: Buchstaben/Formen/Mix, Thema, Tempo, Rechnen/Zeichnen einzeln, Zahlenraum, Rechenarten, Töne, Sprachausgabe, App installieren |
 | 🚀 (rechts unten) | Gedrückt halten lädt Kraft – loslassen schießt die Kugel ab |
 | Missions-Schild | Antippen liest die Mission vor 🔊 |
 | Blauer/roter Knopf unten | Flipper-Arme bewegen |
@@ -86,8 +90,9 @@ Erwachsene gesichert.
 ## ▶️ Starten
 
 Einfach **`index.html`** im Browser öffnen – keine Installation nötig.
-Als App: die Seite im Browser „Zum Startbildschirm hinzufügen“, dann läuft
-das Spiel auch **offline**. Tipp: Sprachausgabe und Töne funktionieren am
+Als App: in den **Einstellungen** auf **„📲 App installieren“** tippen
+(oder im Browser „Zum Startbildschirm hinzufügen“), dann läuft das Spiel
+auch **offline**. Tipp: Sprachausgabe und Töne funktionieren am
 zuverlässigsten über einen lokalen Webserver, z. B.
 `python3 -m http.server 8000` → `http://localhost:8000`.
 

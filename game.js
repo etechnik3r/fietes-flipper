@@ -143,7 +143,10 @@
     symbole: "mix",          // Einstellung: buchstaben | formen | mix
     thema: "pilz",           // Einstellung: pilz | weltraum | dino (nur Optik)
     schwierigkeit: "leicht", // Einstellung: leicht | mittel | schnell
-    zwischenspiele: true,    // Zwischenspiele zwischen den Kugeln?
+    // Zwischenspiele zwischen den Kugeln - jetzt EINZELN schaltbar, damit man
+    // z. B. nur Rechnen ohne Nachzeichnen (oder umgekehrt) haben kann.
+    zwRechnen: true,         // Rechenaufgaben als Zwischenspiel?
+    zwZeichnen: true,        // Nachzeichen-Aufgaben als Zwischenspiel?
     // Rechenaufgabe-Einstellungen (Menue): Zahlenraum + aktive Operationen.
     // Mal/Geteilt bleiben immer im kleinen Einmaleins (Faktoren 1..10).
     rechnen: { zahlenraum: 20, plus: true, minus: true, mal: false, geteilt: false },
@@ -160,7 +163,9 @@
 
   var el = {};               // DOM-Verweise, werden in init() gefuellt
   [
-    "titelscreen", "titel-icon", "mission-schild", "mission-text", "spielfeld",
+    "titelscreen", "titel-icon", "button-start-spiel", "button-titel-einstellungen",
+    "button-install", "install-hinweis",
+    "mission-schild", "mission-text", "spielfeld",
     "symbol-blitz", "lob-banner", "zone-links", "zone-rechts",
     "anzeige-punkte", "anzeige-sterne", "anzeige-baelle",
     "stat-punkte", "stat-sterne", "stat-baelle",
@@ -490,8 +495,8 @@
         jetzt - v[0].zeit < 2500;
       if (pingpong) {
         trefferVerlauf = [];
-        var seitlich = (kugel.position.x < 200 ? 1 : -1) * (3 + Math.random() * 2);
-        Body.setVelocity(kugel, { x: seitlich, y: -4 - Math.random() * 3 });
+        var seitlich = (kugel.position.x < 200 ? 1 : -1) * (2.6 + Math.random() * 1.6);
+        Body.setVelocity(kugel, { x: seitlich, y: -3.4 - Math.random() * 2 });
       }
     }
   }
@@ -933,12 +938,16 @@
     // Nur solange ein Flipper GEHALTEN wird, darf die Kugel dort ruhen
     // (das Kind zielt gerade) - sonst wird jeder Stillstand aufgeloest.
     var haeltFlipper = flipperL.gedrueckt || flipperR.gedrueckt;
-    if (tempo > 0.6 || haeltFlipper) { stillstandSeit = 0; return; }
+    // Schwelle bewusst niedrig (0.4): eine noch spuerbar rollende Kugel gilt
+    // NICHT als Stillstand und wird in Ruhe gelassen. Erst wenn sie ueber
+    // volle 4 s praktisch steht, hilft ein SANFTER Schubs nach - kein
+    // Raketenstart mehr, der die Kugel wild wegspringen liess.
+    if (tempo > 0.4 || haeltFlipper) { stillstandSeit = 0; return; }
     if (!stillstandSeit) { stillstandSeit = performance.now(); return; }
-    if (performance.now() - stillstandSeit > 3000) {
+    if (performance.now() - stillstandSeit > 4000) {
       Body.setVelocity(kugel, {
-        x: (200 - kugel.position.x) * 0.02 + zufallGanzzahl(-2, 2),
-        y: -5
+        x: (200 - kugel.position.x) * 0.016 + zufallGanzzahl(-1, 1),
+        y: -3.1
       });
       stillstandSeit = 0;
     }
@@ -949,30 +958,45 @@
   // Tor, Sling), bleibt sie auf einen winzigen Bereich beschraenkt, OBWOHL
   // sie dabei recht schnell unterwegs ist - pruefeStillstand() (die nur auf
   // NIEDRIGES Tempo achtet) greift da nicht. Darum hier zusaetzlich die
-  // Positions-Spannweite der letzten 1,4 s beobachten: bewegt sich die
-  // Kugel in dieser Zeit kaum vom Fleck, war sie eingeklemmt - unabhaengig
-  // davon, ueber welchen Code-Pfad das passiert ist.
+  // Positionen ueber ein Zeitfenster beobachten.
+  //
+  // WICHTIG (Realismus): Eine langsam - auch an einer Kante oder Schraege -
+  // herunterrollende Kugel darf NICHT als "verklemmt" gelten. Frueher reichte
+  // dafuer schon eine kleine Bewegungs-Spannweite, sodass eine gemuetlich
+  // rollende Kugel ploetzlich weggeschleudert wurde ("springt wild umher").
+  // Jetzt zaehlt zusaetzlich der NETTO-Fortschritt: nur wenn die Kugel weder
+  // viel Flaeche bestreicht NOCH unterm Strich irgendwohin kommt (echtes
+  // Verkeilen / Ping-Pong auf der Stelle), wird sie befreit - und dann mit
+  // einem deutlich sanfteren Schubs statt einem Katapultstart.
   var positionsVerlauf = [];   // { x, y, zeit }
   function pruefeEingeklemmt() {
     if (!kugel || !state.kugelUnterwegs || state.wartetAufAbschuss) {
       positionsVerlauf = []; return;
     }
+    // Haelt das Kind einen Flipper, cradlet es die Kugel bewusst (Zielen) -
+    // das ist gewollter Stillstand und darf nie aufgeloest werden.
+    if (flipperL.gedrueckt || flipperR.gedrueckt) { positionsVerlauf = []; return; }
     var jetzt = performance.now();
     positionsVerlauf.push({ x: kugel.position.x, y: kugel.position.y, zeit: jetzt });
-    while (positionsVerlauf.length && jetzt - positionsVerlauf[0].zeit > 1400) {
+    while (positionsVerlauf.length && jetzt - positionsVerlauf[0].zeit > 2000) {
       positionsVerlauf.shift();
     }
-    // erst urteilen, wenn wirklich ueber die volle Zeitspanne beobachtet wurde
-    if (positionsVerlauf.length < 30 || jetzt - positionsVerlauf[0].zeit < 1300) { return; }
+    // erst urteilen, wenn wirklich ueber die volle Zeitspanne (~2 s) beobachtet
+    if (positionsVerlauf.length < 40 || jetzt - positionsVerlauf[0].zeit < 1900) { return; }
     var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     positionsVerlauf.forEach(function (p) {
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
       minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
     });
-    if (Math.max(maxX - minX, maxY - minY) < 55) {
+    var spanne = Math.max(maxX - minX, maxY - minY);
+    var erster = positionsVerlauf[0];
+    var letzter = positionsVerlauf[positionsVerlauf.length - 1];
+    var netto = Math.hypot(letzter.x - erster.x, letzter.y - erster.y);
+    // Kleiner Bewegungsraum UND kaum Netto-Fortschritt = wirklich fest.
+    if (spanne < 46 && netto < 24) {
       positionsVerlauf = [];
-      var seitlich = (kugel.position.x < 200 ? 1 : -1) * (3 + Math.random() * 2);
-      Body.setVelocity(kugel, { x: seitlich, y: -6 - Math.random() * 3 });
+      var seitlich = (kugel.position.x < 200 ? 1 : -1) * (2.4 + Math.random() * 1.3);
+      Body.setVelocity(kugel, { x: seitlich, y: -3.4 - Math.random() * 1.4 });
     }
   }
 
@@ -988,7 +1012,7 @@
       el.anzeigeBaelle.textContent = state.baelle;
       if (state.baelle === 0) {
         zeigeRundenEnde();                   // Runde vorbei -> Feier + Bilanz
-      } else if (state.zwischenspiele) {
+      } else if (state.zwRechnen || state.zwZeichnen) {
         oeffneZwischenspiel();               // Zeichnen ODER Rechnen -> neue Kugel
       } else {
         window.setTimeout(neueKugel, 900);
@@ -1213,21 +1237,66 @@
     ctx.fill();
   }
 
-  function zeichneBluemchen(x, y, farbe) {
+  // Klar erkennbares Bluemchen: Stiel + zwei Blaettchen, fuenf runde
+  // Bluetenblaetter und eine gelbe Mitte. Kraeftiger als die frueheren
+  // blassen Punkte, damit die Wiese wirklich als Wiese lesbar ist.
+  function zeichneBlume(x, y, farbe, groesse) {
+    var g = groesse || 1;
+    // Stiel
+    ctx.strokeStyle = "rgba(52, 120, 66, 0.75)";
+    ctx.lineWidth = 1.8 * g;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x, y + 12 * g);
+    ctx.lineTo(x, y + 2 * g);
+    ctx.stroke();
+    // ein Blatt am Stiel
+    ctx.fillStyle = "rgba(72, 150, 82, 0.8)";
+    ctx.beginPath();
+    ctx.ellipse(x - 4 * g, y + 8 * g, 3.4 * g, 1.7 * g, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Bluetenblaetter
+    var bl = mischeFarbe(farbe || "#ff9e2c", "#ffffff", 0.15);
     for (var i = 0; i < 5; i++) {
-      var a = i / 5 * Math.PI * 2;
+      var a = -Math.PI / 2 + i / 5 * Math.PI * 2;
       ctx.beginPath();
-      ctx.arc(x + Math.cos(a) * 5, y + Math.sin(a) * 5, 3.4, 0, Math.PI * 2);
-      ctx.fillStyle = mischeFarbe(farbe || "#f3c44a", "#ffffff", 0.3);
-      ctx.globalAlpha = 0.4;
+      ctx.ellipse(x + Math.cos(a) * 3.6 * g, y + Math.sin(a) * 3.6 * g,
+                  3.1 * g, 2.1 * g, a, 0, Math.PI * 2);
+      ctx.fillStyle = bl;
       ctx.fill();
     }
-    ctx.globalAlpha = 1;
+    // Mitte
     ctx.beginPath();
-    ctx.arc(x, y, 3, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(217, 69, 62, 0.4)";
+    ctx.arc(x, y, 2.4 * g, 0, Math.PI * 2);
+    ctx.fillStyle = "#f7c948";
     ctx.fill();
   }
+
+  // Grasbuschel: mehrere getaperte Halme in verschiedenen Gruentoenen, die
+  // sich sanft im "Wind" wiegen (leichte Zeit-Animation) - dadurch liest sich
+  // der Untergrund eindeutig als Wiese statt als vager Farbklecks.
+  var GRAS_TOENE = ["#5aa85a", "#4c9a4c", "#69b566", "#3f8c46"];
+  function zeichneGrasbuschel(x, y, hoehe, phase) {
+    var jetzt = performance.now();
+    var halme = 6;
+    for (var i = 0; i < halme; i++) {
+      var spreiz = (i - (halme - 1) / 2) * 3.1;         // Faecherung
+      var h = hoehe * (0.68 + (i % 3) * 0.16);
+      var sway = Math.sin(jetzt / 760 + phase + i * 0.5) * (2.2 + h * 0.05);
+      var basisX = x + spreiz;
+      var tipX = basisX + spreiz * 0.5 + sway;
+      var breite = 1.7;
+      ctx.beginPath();
+      ctx.moveTo(basisX - breite, y);
+      ctx.quadraticCurveTo(basisX + spreiz * 0.3, y - h * 0.55, tipX, y - h);
+      ctx.quadraticCurveTo(basisX + spreiz * 0.3 + breite, y - h * 0.5, basisX + breite, y);
+      ctx.closePath();
+      ctx.fillStyle = GRAS_TOENE[(i + Math.round(phase)) % GRAS_TOENE.length];
+      ctx.fill();
+    }
+  }
+
+  function zeichneBluemchen(x, y, farbe) { zeichneBlume(x, y, farbe, 1); }
 
   // --- Hintergrund-Deko je Thema: reine Optik, das Spielfeld darunter (Wand-
   //     Koerper, Bumper-Positionen, Rampen) ist fuer alle drei identisch.
@@ -1237,17 +1306,74 @@
     else { zeichneDekorPilz(); }
   }
 
-  // Wiese mit Huegeln + Bluemchen (Standard-Thema)
+  // Wiese: sanfte Grashuegel als Grundband, ein warmer Sonnenschein oben,
+  // klare Grasbuschel entlang der Huegelkanten sowie eindeutige Bluemchen
+  // und ein paar kleine Pilze. Deutlich lesbarer als die frueheren blassen
+  // Andeutungen - und trotzdem dezent genug, dass die Kugel gut sichtbar bleibt.
   function zeichneDekorPilz() {
-    ctx.fillStyle = "rgba(40, 192, 138, 0.11)";
-    ctx.beginPath(); ctx.ellipse(90, 470, 120, 46, 0, Math.PI, 0); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(300, 480, 130, 52, 0, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = "rgba(47, 111, 214, 0.07)";
-    ctx.beginPath(); ctx.arc(200, 210, 92, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(243, 196, 74, 0.08)";
-    ctx.beginPath(); ctx.ellipse(200, 340, 140, 40, 0, 0, Math.PI * 2); ctx.fill();
-    [[70, 130], [330, 140], [160, 400], [240, 388], [110, 330], [290, 330]]
-      .forEach(function (b, i) { zeichneBluemchen(b[0], b[1], KONFETTI_FARBEN[i % KONFETTI_FARBEN.length]); });
+    // warmer Sonnenschein oben in der Kuppel
+    var sonne = ctx.createRadialGradient(200, 150, 20, 200, 150, 150);
+    sonne.addColorStop(0, "rgba(255, 236, 170, 0.18)");
+    sonne.addColorStop(1, "rgba(255, 236, 170, 0)");
+    ctx.fillStyle = sonne;
+    ctx.beginPath(); ctx.arc(200, 150, 150, 0, Math.PI * 2); ctx.fill();
+
+    // gestaffelte Grashuegel als weiche Grundband-Silhouette
+    var huegel = [
+      { y: 452, farbe: "rgba(120, 196, 116, 0.20)", amp: 20 },
+      { y: 486, farbe: "rgba(96, 178, 100, 0.26)",  amp: 26 },
+      { y: 522, farbe: "rgba(74, 156, 84, 0.30)",   amp: 22 }
+    ];
+    huegel.forEach(function (h) {
+      ctx.fillStyle = h.farbe;
+      ctx.beginPath();
+      ctx.moveTo(16, FELD_H);
+      ctx.lineTo(16, h.y);
+      for (var x = 16; x <= 384; x += 24) {
+        ctx.quadraticCurveTo(x + 12, h.y - h.amp, x + 24, h.y);
+      }
+      ctx.lineTo(384, FELD_H);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // Grasbuschel entlang der mittleren Huegelkante + an den Seiten
+    [[52, 470, 20, 0], [128, 462, 16, 1.4], [200, 470, 22, 2.1],
+     [272, 462, 16, 3.0], [348, 472, 20, 0.7], [96, 500, 15, 2.6],
+     [304, 502, 15, 1.1], [200, 508, 18, 3.4]]
+      .forEach(function (b) { zeichneGrasbuschel(b[0], b[1], b[2], b[3]); });
+
+    // ein paar kleine Deko-Pilze auf der Wiese (passend zum Thema)
+    zeichneMiniPilz(120, 452, 1);
+    zeichneMiniPilz(286, 456, 0.85);
+
+    // klar erkennbare Bluemchen, ueber das Feld verteilt (nicht auf Bumpern)
+    [[64, 300, "#d9453e"], [340, 300, "#9a7bd0"], [150, 402, "#ff9e2c"],
+     [250, 400, "#2f6fd6"], [40, 250, "#f3c44a"], [364, 250, "#28c08a"]]
+      .forEach(function (b) { zeichneBlume(b[0], b[1], b[2], 1); });
+  }
+
+  // Kleiner Deko-Pilz auf der Wiese (roter Hut mit Tupfen, heller Stiel)
+  function zeichneMiniPilz(x, y, s) {
+    ctx.fillStyle = "rgba(30, 44, 82, 0.12)";
+    ctx.beginPath(); ctx.ellipse(x, y + 10 * s, 9 * s, 3 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#f6efdc";
+    ctx.beginPath();
+    abgerundetesRechteck(x - 3 * s, y - 1 * s, 6 * s, 12 * s, 3 * s);
+    ctx.fill();
+    var hut = ctx.createLinearGradient(x, y - 12 * s, x, y + 2 * s);
+    hut.addColorStop(0, "#e8624f"); hut.addColorStop(1, "#c9402f");
+    ctx.fillStyle = hut;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 11 * s, 8 * s, 0, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    [[-4, -3, 1.6], [3, -4, 1.3], [0, -1, 1.2]].forEach(function (t) {
+      ctx.beginPath();
+      ctx.arc(x + t[0] * s, y + t[1] * s, t[2] * s, 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
 
   // Sternenfeld mit fernen Planeten (Weltraum-Thema)
@@ -1290,16 +1416,37 @@
     ctx.fill();
   }
 
-  // Dschungel mit Farnen + fernem Vulkan (Dino-Thema)
+  // Dschungel: dichter Bodenbewuchs als gestaffelte Huegel, klar erkennbare
+  // Grasbuschel und Farne, dazu ein warmer Dunst oben.
   function zeichneDekorDino() {
-    ctx.fillStyle = "rgba(92, 138, 74, 0.14)";
-    ctx.beginPath(); ctx.ellipse(90, 470, 120, 46, 0, Math.PI, 0); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(300, 480, 130, 52, 0, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = "rgba(139, 111, 58, 0.08)";
-    ctx.beginPath(); ctx.arc(200, 210, 92, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(92, 138, 74, 0.09)";
-    ctx.beginPath(); ctx.ellipse(200, 340, 140, 40, 0, 0, Math.PI * 2); ctx.fill();
-    [[70, 130], [330, 140], [160, 400], [240, 388], [110, 330], [290, 330]]
+    var dunst = ctx.createRadialGradient(200, 160, 20, 200, 160, 150);
+    dunst.addColorStop(0, "rgba(180, 210, 130, 0.16)");
+    dunst.addColorStop(1, "rgba(180, 210, 130, 0)");
+    ctx.fillStyle = dunst;
+    ctx.beginPath(); ctx.arc(200, 160, 150, 0, Math.PI * 2); ctx.fill();
+
+    var huegel = [
+      { y: 452, farbe: "rgba(120, 168, 92, 0.20)", amp: 22 },
+      { y: 488, farbe: "rgba(96, 146, 78, 0.26)",  amp: 26 },
+      { y: 524, farbe: "rgba(74, 122, 64, 0.30)",  amp: 22 }
+    ];
+    huegel.forEach(function (h) {
+      ctx.fillStyle = h.farbe;
+      ctx.beginPath();
+      ctx.moveTo(16, FELD_H);
+      ctx.lineTo(16, h.y);
+      for (var x = 16; x <= 384; x += 24) {
+        ctx.quadraticCurveTo(x + 12, h.y - h.amp, x + 24, h.y);
+      }
+      ctx.lineTo(384, FELD_H);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    [[52, 470, 22, 0], [200, 470, 24, 2.1], [348, 472, 22, 0.7],
+     [128, 500, 16, 1.4], [272, 502, 16, 3.0]]
+      .forEach(function (b) { zeichneGrasbuschel(b[0], b[1], b[2], b[3]); });
+    [[64, 300], [340, 300], [150, 402], [250, 400], [40, 250], [364, 250]]
       .forEach(function (b) { zeichneFarn(b[0], b[1]); });
   }
 
@@ -2014,10 +2161,22 @@
        b) Eine Rechenaufgabe (Zahlenraum + Operationen im Menue einstellbar).
      Es gibt bewusst KEINEN Ueberspringen-Knopf: die Aufgabe ist unausweichlich. */
 
-  // Abwechselnd Zeichnen / Rechnen aufrufen
+  // Zwischenspiel auswaehlen und oeffnen. Sind BEIDE Arten aktiv, wechseln
+  // sie sich ab (zeichnen <-> rechnen). Ist nur eine aktiv, kommt immer diese.
+  // Ist keine aktiv, geht es sofort mit der naechsten Kugel weiter.
   function oeffneZwischenspiel() {
-    var typ = state.naechstesZwischen;
-    state.naechstesZwischen = (typ === "zeichnen") ? "rechnen" : "zeichnen";
+    var typ;
+    if (state.zwRechnen && state.zwZeichnen) {
+      typ = state.naechstesZwischen;
+      state.naechstesZwischen = (typ === "zeichnen") ? "rechnen" : "zeichnen";
+    } else if (state.zwRechnen) {
+      typ = "rechnen";
+    } else if (state.zwZeichnen) {
+      typ = "zeichnen";
+    } else {
+      window.setTimeout(neueKugel, 900);      // Sicherheitsnetz: nichts aktiv
+      return;
+    }
     if (typ === "rechnen") { oeffneRechnen(); } else { oeffneZeichnen(); }
   }
 
@@ -2393,8 +2552,11 @@
     el.titelIcon.textContent = THEMA().icon;
   }
 
-  // --- Titelscreen: erster Tipp startet Spiel + Audio-Freigabe
-  el.titelscreen.addEventListener("click", function () {
+  // --- Spielstart: der grosse "Spiel starten"-Knopf auf dem Titelscreen
+  //     startet das Spiel und gibt dabei Audio frei (Browser verlangen dafuer
+  //     eine Nutzer-Geste). Die Einstellungen lassen sich VORHER direkt vom
+  //     Titelscreen aus oeffnen, ohne erst spielen zu muessen.
+  function starteSpiel() {
     if (state.laeuft) { return; }
     el.titelscreen.classList.add("aus");
     window.setTimeout(function () { el.titelscreen.hidden = true; }, 500);
@@ -2407,6 +2569,12 @@
     verteileSymbole();
     planeMission(6000);
     neueKugel();
+  }
+  el.buttonStartSpiel.addEventListener("click", starteSpiel);
+  el.buttonTitelEinstellungen.addEventListener("click", function () {
+    weckeAudio();
+    markiereEinstellungen();
+    oeffneModal(el.einstellungen);
   });
 
   // --- Konfetti (rein DOM/CSS, respektiert Reduced Motion)
@@ -2462,7 +2630,8 @@
         (s === "symbole" && state.symbole === w) ||
         (s === "thema" && state.thema === w) ||
         (s === "schwierigkeit" && state.schwierigkeit === w) ||
-        (s === "zwischen" && state.zwischenspiele === (w === "an")) ||
+        (s === "zwischen" && w === "rechnen" && state.zwRechnen) ||
+        (s === "zwischen" && w === "zeichnen" && state.zwZeichnen) ||
         (s === "zahlenraum" && state.rechnen.zahlenraum === parseInt(w, 10)) ||
         (s === "rechenop" && state.rechnen[w] === true) ||
         (s === "toene"   && state.toene   === (w === "an")) ||
@@ -2488,7 +2657,8 @@
         state.schwierigkeit = w;
         wendeSchwierigkeitAn();              // wirkt sofort auf die Kugel
       }
-      if (s === "zwischen") { state.zwischenspiele = (w === "an"); }
+      if (s === "zwischen" && w === "rechnen")  { state.zwRechnen  = !state.zwRechnen; }
+      if (s === "zwischen" && w === "zeichnen") { state.zwZeichnen = !state.zwZeichnen; }
       if (s === "zahlenraum") { state.rechnen.zahlenraum = parseInt(w, 10); }
       if (s === "rechenop") { state.rechnen[w] = !state.rechnen[w]; }  // Mehrfachauswahl
       if (s === "toene")   { state.toene   = (w === "an"); }
@@ -2554,7 +2724,8 @@
     try {
       window.localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify({
         symbole: state.symbole, thema: state.thema,
-        schwierigkeit: state.schwierigkeit, zwischenspiele: state.zwischenspiele,
+        schwierigkeit: state.schwierigkeit,
+        zwRechnen: state.zwRechnen, zwZeichnen: state.zwZeichnen,
         rechnen: state.rechnen, toene: state.toene, sprache: state.sprache
       }));
     } catch (fehler) { /* privater Modus o.ae. - dann eben ohne Speichern */ }
@@ -2567,9 +2738,14 @@
       if (typeof d.symbole === "string") { state.symbole = d.symbole; }
       if (THEMEN[d.thema]) { state.thema = d.thema; }
       if (SCHWIERIGKEITEN[d.schwierigkeit]) { state.schwierigkeit = d.schwierigkeit; }
-      // Zwischenspiele (neuer Schluessel, aber alten "spiegel" noch respektieren)
-      if (typeof d.zwischenspiele === "boolean") { state.zwischenspiele = d.zwischenspiele; }
-      else if (typeof d.spiegel === "boolean") { state.zwischenspiele = d.spiegel; }
+      // Zwischenspiele: neue Einzelschalter, sonst aus alten Gesamt-Schaltern
+      // ("zwischenspiele"/"spiegel") ableiten, damit gespeicherte Staende passen.
+      if (typeof d.zwRechnen === "boolean")  { state.zwRechnen  = d.zwRechnen; }
+      else if (typeof d.zwischenspiele === "boolean") { state.zwRechnen = d.zwischenspiele; }
+      else if (typeof d.spiegel === "boolean") { state.zwRechnen = d.spiegel; }
+      if (typeof d.zwZeichnen === "boolean") { state.zwZeichnen = d.zwZeichnen; }
+      else if (typeof d.zwischenspiele === "boolean") { state.zwZeichnen = d.zwischenspiele; }
+      else if (typeof d.spiegel === "boolean") { state.zwZeichnen = d.spiegel; }
       if (d.rechnen && typeof d.rechnen === "object") {
         if ([10, 20, 100].indexOf(d.rechnen.zahlenraum) >= 0) {
           state.rechnen.zahlenraum = d.rechnen.zahlenraum;
@@ -2617,6 +2793,63 @@
       navigator.serviceWorker.register("sw.js").catch(function () { /* egal */ });
     });
   }
+
+  // --- "App installieren": in den Einstellungen kann das Spiel als richtige
+  //     App (PWA) auf den Startbildschirm gelegt werden. Chrome/Edge/Android
+  //     liefern dafuer das Ereignis "beforeinstallprompt" - dann zeigen wir
+  //     den Knopf und rufen beim Tippen den nativen Install-Dialog auf. Ist
+  //     die App schon installiert (oder als App geoeffnet), zeigen wir das
+  //     an. Auf iOS gibt es kein Ereignis -> kurze Anleitung ueber "Teilen".
+  var installEreignis = null;
+  function laeuftAlsApp() {
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+           window.navigator.standalone === true;
+  }
+  function aktualisiereInstallBereich() {
+    if (!el.buttonInstall || !el.installHinweis) { return; }
+    if (laeuftAlsApp()) {
+      el.buttonInstall.hidden = true;
+      el.installHinweis.hidden = false;
+      el.installHinweis.textContent = "✅ Läuft bereits als App.";
+      return;
+    }
+    if (installEreignis) {
+      el.buttonInstall.hidden = false;
+      el.installHinweis.hidden = true;
+      return;
+    }
+    // Kein Install-Ereignis (z. B. iOS/Safari): kleine Anleitung statt Knopf
+    el.buttonInstall.hidden = true;
+    var iOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+    el.installHinweis.hidden = false;
+    el.installHinweis.textContent = iOS
+      ? "Zum Installieren: unten „Teilen“ ▸ „Zum Home-Bildschirm“."
+      : "Im Browser-Menü „App installieren“ bzw. „Zum Startbildschirm“ wählen.";
+  }
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    installEreignis = e;
+    aktualisiereInstallBereich();
+  });
+  window.addEventListener("appinstalled", function () {
+    installEreignis = null;
+    if (el.installHinweis) {
+      el.installHinweis.hidden = false;
+      el.installHinweis.textContent = "✅ Installiert – viel Spaß!";
+    }
+    if (el.buttonInstall) { el.buttonInstall.hidden = true; }
+  });
+  if (el.buttonInstall) {
+    el.buttonInstall.addEventListener("click", function () {
+      if (!installEreignis) { return; }
+      installEreignis.prompt();
+      installEreignis.userChoice.finally(function () {
+        installEreignis = null;
+        aktualisiereInstallBereich();
+      });
+    });
+  }
+  aktualisiereInstallBereich();
 
   // --- Los geht's
   ladeGespeichertenStand();
